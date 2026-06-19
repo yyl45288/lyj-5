@@ -1,0 +1,205 @@
+class CombatSystem {
+  constructor(gameState) {
+    this.gameState = gameState;
+  }
+
+  startCombat(enemy) {
+    this.gameState.combat = {
+      active: true,
+      enemy: { ...enemy },
+      playerTurn: true,
+      log: [`遭遇了 ${enemy.name}！`]
+    };
+    this.addCombatLog(`${enemy.icon} ${enemy.name} 出现了！`);
+    return this.gameState.combat;
+  }
+
+  calculateDamage(attacker, defender) {
+    const baseDamage = Math.max(1, attacker.attack - defender.defense);
+    const variance = Math.floor(Math.random() * 5) - 2;
+    const critChance = Math.random();
+    const isCrit = critChance < 0.1;
+    const finalDamage = Math.max(1, baseDamage + variance) * (isCrit ? 2 : 1);
+    return { damage: finalDamage, isCrit };
+  }
+
+  getPlayerTotalStats() {
+    const player = this.gameState.player;
+    let attack = player.stats.attack;
+    let defense = player.stats.defense;
+    let maxHp = player.stats.maxHp;
+
+    if (player.equipment.weapon) {
+      attack += player.equipment.weapon.stats.attack || 0;
+      defense += player.equipment.weapon.stats.defense || 0;
+      maxHp += player.equipment.weapon.stats.maxHp || 0;
+    }
+    if (player.equipment.armor) {
+      attack += player.equipment.armor.stats.attack || 0;
+      defense += player.equipment.armor.stats.defense || 0;
+      maxHp += player.equipment.armor.stats.maxHp || 0;
+    }
+    if (player.equipment.accessory) {
+      attack += player.equipment.accessory.stats.attack || 0;
+      defense += player.equipment.accessory.stats.defense || 0;
+      maxHp += player.equipment.accessory.stats.maxHp || 0;
+    }
+
+    return { attack, defense, maxHp };
+  }
+
+  playerAttack() {
+    if (!this.gameState.combat.active || !this.gameState.combat.playerTurn) return null;
+
+    const playerStats = this.getPlayerTotalStats();
+    const enemy = this.gameState.combat.enemy;
+    const attacker = { attack: playerStats.attack };
+    const defender = { defense: enemy.defense };
+
+    const { damage, isCrit } = this.calculateDamage(attacker, defender);
+    enemy.currentHp -= damage;
+
+    const critText = isCrit ? '【暴击！】' : '';
+    this.addCombatLog(`⚔️ 你对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
+
+    if (enemy.currentHp <= 0) {
+      return this.enemyDefeated();
+    }
+
+    this.gameState.combat.playerTurn = false;
+    return { type: 'playerAttack', damage, isCrit, enemyHp: enemy.currentHp };
+  }
+
+  playerDefend() {
+    if (!this.gameState.combat.active || !this.gameState.combat.playerTurn) return null;
+
+    this.addCombatLog('🛡️ 你进入防御姿态，减少受到的伤害！');
+    this.gameState.combat.playerTurn = false;
+    this.gameState.combat.defending = true;
+    return { type: 'playerDefend' };
+  }
+
+  playerFlee() {
+    if (!this.gameState.combat.active || !this.gameState.combat.playerTurn) return null;
+
+    const fleeChance = 0.4 + (this.gameState.player.stats.level * 0.05);
+    if (Math.random() < fleeChance) {
+      this.addCombatLog('🏃 你成功逃离了战斗！');
+      this.endCombat(false);
+      return { type: 'fleeSuccess' };
+    } else {
+      this.addCombatLog('❌ 逃跑失败！');
+      this.gameState.combat.playerTurn = false;
+      return { type: 'fleeFailed' };
+    }
+  }
+
+  enemyTurn() {
+    if (!this.gameState.combat.active || this.gameState.combat.playerTurn) return null;
+
+    const enemy = this.gameState.combat.enemy;
+    const playerStats = this.getPlayerTotalStats();
+    const attacker = { attack: enemy.attack };
+    const defender = { defense: playerStats.defense };
+
+    if (this.gameState.combat.defending) {
+      defender.defense = Math.floor(defender.defense * 2);
+      this.gameState.combat.defending = false;
+    }
+
+    const { damage, isCrit } = this.calculateDamage(attacker, defender);
+    this.gameState.player.stats.currentHp -= damage;
+
+    const critText = isCrit ? '【暴击！】' : '';
+    this.addCombatLog(`💥 ${enemy.name} 对你造成了 ${critText}${damage} 点伤害！`);
+
+    if (this.gameState.player.stats.currentHp <= 0) {
+      this.gameState.player.stats.currentHp = 0;
+      return this.playerDefeated();
+    }
+
+    this.gameState.combat.playerTurn = true;
+    return { type: 'enemyAttack', damage, isCrit, playerHp: this.gameState.player.stats.currentHp };
+  }
+
+  enemyDefeated() {
+    const enemy = this.gameState.combat.enemy;
+    const expGain = enemy.expReward;
+    const scoreGain = expGain * 2;
+
+    this.gameState.player.stats.exp += expGain;
+    this.gameState.score += scoreGain;
+    this.gameState.kills++;
+
+    this.addCombatLog(`🎉 你击败了 ${enemy.name}！`);
+    this.addCombatLog(`✨ 获得 ${expGain} 经验值，${scoreGain} 积分！`);
+
+    let droppedItem = null;
+    if (Math.random() < enemy.dropRate) {
+      droppedItem = getRandomEquipment(this.gameState.dungeon.floor);
+      this.gameState.player.inventory.push(droppedItem);
+      this.addCombatLog(`📦 ${enemy.name} 掉落了 ${droppedItem.icon} ${droppedItem.name}！`);
+    }
+
+    const levelResult = this.checkLevelUp();
+
+    this.endCombat(true);
+    return {
+      type: 'victory',
+      expGain,
+      scoreGain,
+      droppedItem,
+      levelUp: levelResult
+    };
+  }
+
+  playerDefeated() {
+    this.addCombatLog('💀 你被击败了...');
+    this.gameState.combat.active = false;
+    return { type: 'defeat' };
+  }
+
+  checkLevelUp() {
+    const player = this.gameState.player;
+    const levelUps = [];
+
+    while (player.stats.exp >= player.stats.expToNext) {
+      player.stats.exp -= player.stats.expToNext;
+      player.stats.level++;
+      player.stats.expToNext = Math.floor(player.stats.expToNext * 1.5);
+
+      const hpGain = 10 + Math.floor(Math.random() * 10);
+      const atkGain = 2 + Math.floor(Math.random() * 3);
+      const defGain = 1 + Math.floor(Math.random() * 2);
+
+      player.stats.maxHp += hpGain;
+      player.stats.currentHp = Math.min(player.stats.currentHp + hpGain, player.stats.maxHp);
+      player.stats.attack += atkGain;
+      player.stats.defense += defGain;
+
+      levelUps.push({ level: player.stats.level, hpGain, atkGain, defGain });
+      this.addCombatLog(`🎊 升级！你现在是 ${player.stats.level} 级了！`);
+      this.addCombatLog(`   HP +${hpGain}, ATK +${atkGain}, DEF +${defGain}`);
+    }
+
+    return levelUps.length > 0 ? levelUps : null;
+  }
+
+  endCombat(victory) {
+    this.gameState.combat.active = false;
+    this.gameState.combat.enemy = null;
+    this.gameState.combat.log = [];
+    return victory;
+  }
+
+  addCombatLog(message) {
+    this.gameState.combat.log.push(message);
+    this.gameState.gameLog.push(message);
+    if (this.gameState.combat.log.length > 50) {
+      this.gameState.combat.log.shift();
+    }
+    if (this.gameState.gameLog.length > 100) {
+      this.gameState.gameLog.shift();
+    }
+  }
+}

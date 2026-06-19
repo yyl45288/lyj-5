@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roguelike 地牢探险</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="particles-bg"></div>
+
+    <div id="main-menu" class="screen active">
+        <div class="menu-container">
+            <h1 class="game-title">
+                <span class="title-icon">⚔️</span>
+                <span class="title-text">ROGUELIKE</span>
+                <span class="title-sub">地牢探险</span>
+            </h1>
+            <div class="menu-buttons">
+                <button class="menu-btn" id="new-game-btn">
+                    <span class="btn-icon">🎮</span>
+                    新游戏
+                </button>
+                <button class="menu-btn" id="continue-btn">
+                    <span class="btn-icon">📂</span>
+                    继续游戏
+                </button>
+                <button class="menu-btn" id="scores-btn">
+                    <span class="btn-icon">🏆</span>
+                    排行榜
+                </button>
+            </div>
+            <div class="menu-controls">
+                <p>操作说明：WASD 或 方向键移动 | 战斗时点击按钮</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="scores-screen" class="screen">
+        <div class="scores-container">
+            <h2 class="scores-title">🏆 历史排行榜</h2>
+            <div id="scores-list" class="scores-list">
+            </div>
+            <button class="menu-btn back-btn" id="back-to-menu-btn">
+                <span class="btn-icon">🔙</span>
+                返回主菜单
+            </button>
+        </div>
+    </div>
+
+    <div id="game-screen" class="screen">
+        <div class="game-container">
+            <div class="left-panel">
+                <div class="player-panel">
+                    <h3 class="panel-title">🧙 角色状态</h3>
+                    <div class="player-stats">
+                        <div class="stat-row">
+                            <span class="stat-label">等级</span>
+                            <span class="stat-value" id="player-level">1</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">积分</span>
+                            <span class="stat-value" id="player-score">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">击杀</span>
+                            <span class="stat-value" id="player-kills">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">层数</span>
+                            <span class="stat-value" id="player-floor">1</span>
+                        </div>
+                    </div>
+                    <div class="bar-container">
+                        <div class="bar-label">
+                            <span>❤️ 生命值</span>
+                            <span id="hp-text">100/100</span>
+                        </div>
+                        <div class="bar hp-bar">
+                            <div class="bar-fill" id="hp-fill"></div>
+                        </div>
+                    </div>
+                    <div class="bar-container">
+                        <div class="bar-label">
+                            <span>⭐ 经验值</span>
+                            <span id="exp-text">0/100</span>
+                        </div>
+                        <div class="bar exp-bar">
+                            <div class="bar-fill" id="exp-fill"></div>
+                        </div>
+                    </div>
+                    <div class="attributes">
+                        <div class="attr-item">
+                            <span class="attr-icon">⚔️</span>
+                            <span class="attr-label">攻击</span>
+                            <span class="attr-value" id="player-attack">10</span>
+                        </div>
+                        <div class="attr-item">
+                            <span class="attr-icon">🛡️</span>
+                            <span class="attr-label">防御</span>
+                            <span class="attr-value" id="player-defense">5</span>
+                        </div>
+                    </div>
+                    <div class="equipment-slots">
+                        <h4 class="sub-title">装备栏</h4>
+                        <div class="equip-row">
+                            <div class="equip-slot" data-slot="weapon">
+                                <span class="slot-label">武器</span>
+                                <div class="slot-content" id="equip-weapon">-</div>
+                            </div>
+                            <div class="equip-slot" data-slot="armor">
+                                <span class="slot-label">护甲</span>
+                                <div class="slot-content" id="equip-armor">-</div>
+                            </div>
+                            <div class="equip-slot" data-slot="accessory">
+                                <span class="slot-label">饰品</span>
+                                <div class="slot-content" id="equip-accessory">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="center-panel">
+                <div id="map-container" class="map-container">
+                    <div id="game-map" class="game-map"></div>
+                </div>
+
+                <div id="combat-overlay" class="combat-overlay hidden">
+                    <div class="combat-container">
+                        <h3 class="combat-title">⚔️ 战斗中！</h3>
+                        <div class="combat-enemy">
+                            <div class="enemy-icon" id="enemy-icon">👹</div>
+                            <div class="enemy-info">
+                                <div class="enemy-name" id="enemy-name">敌人</div>
+                                <div class="bar-container">
+                                    <div class="bar-label">
+                                        <span>❤️ HP</span>
+                                        <span id="enemy-hp-text">50/50</span>
+                                    </div>
+                                    <div class="bar enemy-hp-bar">
+                                        <div class="bar-fill" id="enemy-hp-fill"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="combat-log" id="combat-log"></div>
+                        <div class="combat-actions" id="combat-actions">
+                            <button class="combat-btn attack-btn" data-action="attack">
+                                <span class="btn-icon">⚔️</span>攻击
+                            </button>
+                            <button class="combat-btn defend-btn" data-action="defend">
+                                <span class="btn-icon">🛡️</span>防御
+                            </button>
+                            <button class="combat-btn heal-btn" data-action="heal">
+                                <span class="btn-icon">💚</span>休息
+                            </button>
+                            <button class="combat-btn flee-btn" data-action="flee">
+                                <span class="btn-icon">🏃</span>逃跑
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="inventory-panel">
+                    <h3 class="panel-title">🎒 背包</h3>
+                    <div id="inventory-grid" class="inventory-grid"></div>
+                </div>
+                <div class="log-panel">
+                    <h3 class="panel-title">📜 消息日志</h3>
+                    <div id="game-log" class="game-log"></div>
+                </div>
+                <div class="game-actions">
+                    <button class="action-btn" id="save-btn">
+                        <span class="btn-icon">💾</span>保存
+                    </button>
+                    <button class="action-btn" id="quit-btn">
+                        <span class="btn-icon">🚪</span>退出
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="gameover-screen" class="screen">
+        <div class="gameover-container">
+            <h2 class="gameover-title">💀 你死了</h2>
+            <div class="gameover-stats">
+                <div class="final-stat">
+                    <span class="stat-icon">🏆</span>
+                    <span class="stat-label">最终积分</span>
+                    <span class="stat-value" id="final-score">0</span>
+                </div>
+                <div class="final-stat">
+                    <span class="stat-icon">⚔️</span>
+                    <span class="stat-label">击杀敌人</span>
+                    <span class="stat-value" id="final-kills">0</span>
+                </div>
+                <div class="final-stat">
+                    <span class="stat-icon">🏰</span>
+                    <span class="stat-label">到达层数</span>
+                    <span class="stat-value" id="final-floor">1</span>
+                </div>
+                <div class="final-stat">
+                    <span class="stat-icon">⭐</span>
+                    <span class="stat-label">角色等级</span>
+                    <span class="stat-value" id="final-level">1</span>
+                </div>
+            </div>
+            <div class="medal-display" id="medal-display">🥉</div>
+            <div class="gameover-actions">
+                <button class="menu-btn" id="restart-btn">
+                    <span class="btn-icon">🔄</span>再来一局
+                </button>
+                <button class="menu-btn" id="menu-btn">
+                    <span class="btn-icon">🏠</span>返回主菜单
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="item-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3 class="modal-title" id="modal-item-name">物品名称</h3>
+            <div class="modal-item-info">
+                <span class="modal-item-icon" id="modal-item-icon">🗡️</span>
+                <span class="modal-item-rarity" id="modal-item-rarity">普通</span>
+            </div>
+            <div class="modal-item-stats" id="modal-item-stats"></div>
+            <div class="modal-actions">
+                <button class="modal-btn" id="equip-btn">装备</button>
+                <button class="modal-btn" id="discard-btn">丢弃</button>
+                <button class="modal-btn" id="close-modal-btn">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="notification hidden"></div>
+
+    <script src="js/data.js"></script>
+    <script src="js/mapGenerator.js"></script>
+    <script src="js/combatSystem.js"></script>
+    <script src="js/characterSystem.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
