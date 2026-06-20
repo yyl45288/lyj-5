@@ -229,3 +229,107 @@ function getRandomEnemy(floor = 1) {
     dropRate: baseEnemy.dropRate
   };
 }
+
+const MERCHANT_DATA = [
+  { id: 'merchant_1', name: '流浪商人', icon: '🧙‍♂️', greeting: '欢迎光临！我这里有各种好东西！', baseDiscount: 1.0 },
+  { id: 'merchant_2', name: '神秘老者', icon: '🧓', greeting: '年轻人，看看这些宝贝吧...', baseDiscount: 0.95 },
+  { id: 'merchant_3', name: '地精商贩', icon: '👺', greeting: '嘿嘿嘿，来看看我的货！便宜又实惠！', baseDiscount: 0.85 },
+  { id: 'merchant_4', name: '精灵商人', icon: '🧝', greeting: '远方的朋友，我带来了精灵族的珍品。', baseDiscount: 1.1 },
+  { id: 'merchant_5', name: '矮人工匠', icon: '🧔', greeting: '瞧瞧这些手工打造的装备！绝对坚固！', baseDiscount: 1.05 },
+  { id: 'merchant_6', name: '黑市商人', icon: '🎭', greeting: '嘘...我这里有些特别的东西...', baseDiscount: 0.75 }
+];
+
+const ATTRIBUTE_TYPES = [
+  { id: 'maxHp', name: '生命上限', icon: '❤️', basePrice: 50, baseValue: 10, description: '永久提升最大生命值' },
+  { id: 'attack', name: '攻击力', icon: '⚔️', basePrice: 80, baseValue: 2, description: '永久提升攻击力' },
+  { id: 'defense', name: '防御力', icon: '🛡️', basePrice: 80, baseValue: 1, description: '永久提升防御力' }
+];
+
+function calculateItemBuyPrice(item, floor, merchantDiscount = 1.0) {
+  const rarityMultiplier = {
+    common: 1,
+    uncommon: 2,
+    rare: 4,
+    epic: 8,
+    legendary: 20
+  };
+  
+  let baseValue = 0;
+  if (item.stats) {
+    baseValue += (item.stats.attack || 0) * 15;
+    baseValue += (item.stats.defense || 0) * 15;
+    baseValue += (item.stats.maxHp || 0) * 2;
+  }
+  
+  if (item.weatherProtection) baseValue += 100;
+  if (item.weatherDamageResist) baseValue += 80;
+  if (item.ignoreWeatherMoveBlock) baseValue += 60;
+  
+  if (baseValue < 20) baseValue = 20;
+  
+  const rarityMod = rarityMultiplier[item.rarity] || 1;
+  const floorMod = 1 + (floor - 1) * 0.05;
+  const valueMod = 1 / (1 + (floor - 1) * 0.03);
+  
+  return Math.floor(baseValue * rarityMod * floorMod * valueMod * merchantDiscount);
+}
+
+function calculateItemSellPrice(item, floor) {
+  const buyPrice = calculateItemBuyPrice(item, floor, 1.0);
+  return Math.floor(buyPrice * 0.5);
+}
+
+function calculateAttributePrice(attrType, floor, purchasedCount) {
+  const basePrice = ATTRIBUTE_TYPES.find(a => a.id === attrType)?.basePrice || 50;
+  const floorMod = 1 + (floor - 1) * 0.1;
+  const valueMod = 1 + (floor - 1) * 0.02;
+  const countMod = 1 + purchasedCount * 0.2;
+  
+  return Math.floor(basePrice * floorMod * valueMod * countMod);
+}
+
+function calculateAttributeValue(attrType, floor) {
+  const baseValue = ATTRIBUTE_TYPES.find(a => a.id === attrType)?.baseValue || 1;
+  const floorMod = 1 + (floor - 1) * 0.05;
+  return Math.floor(baseValue * floorMod);
+}
+
+function generateMerchantInventory(floor, merchant) {
+  const items = [];
+  const itemCount = 3 + Math.floor(Math.random() * 3) + Math.floor(floor / 5);
+  
+  for (let i = 0; i < itemCount; i++) {
+    const item = getRandomEquipment(floor);
+    item.buyPrice = calculateItemBuyPrice(item, floor, merchant.baseDiscount);
+    item.sellPrice = calculateItemSellPrice(item, floor);
+    items.push(item);
+  }
+  
+  return items;
+}
+
+function generateMerchant(floor) {
+  const baseMerchant = MERCHANT_DATA[Math.floor(Math.random() * MERCHANT_DATA.length)];
+  const floorMod = 1 + (floor - 1) * 0.02;
+  
+  return {
+    ...baseMerchant,
+    id: `${baseMerchant.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    floor: floor,
+    discount: baseMerchant.baseDiscount,
+    inventory: generateMerchantInventory(floor, baseMerchant),
+    attributePurchased: {
+      maxHp: 0,
+      attack: 0,
+      defense: 0
+    },
+    goldReward: Math.floor(20 + floor * 15 + Math.random() * floor * 10),
+    expReward: Math.floor(10 + floor * 5)
+  };
+}
+
+function getRandomGoldAmount(floor) {
+  const baseAmount = 5 + floor * 3;
+  const variance = Math.floor(Math.random() * baseAmount * 0.5);
+  return Math.floor(baseAmount + variance);
+}

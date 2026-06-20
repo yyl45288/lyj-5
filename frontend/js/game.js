@@ -4,6 +4,8 @@ class Game {
         this.combatSystem = null;
         this.selectedItem = null;
         this.autoSaveTimer = null;
+        this.currentMerchant = null;
+        this.activeTab = 'buy';
     }
 
     async startNewGame() {
@@ -18,7 +20,7 @@ class Game {
     async continueGame() {
         const result = await StorageManager.loadFromLocal();
         if (result.success) {
-            this.gameState = result.gameState;
+            this.gameState = CharacterSystem.ensureGameStateCompatibility(result.gameState);
             this.combatSystem = new CombatSystem(this.gameState);
             this.startAutoSave();
             this.showScreen('game-screen');
@@ -67,6 +69,12 @@ class Game {
         if (result.type === 'encounter') {
             this.combatSystem.startCombat(result.enemy);
             this.removeEnemyFromMap(result.position);
+            this.render();
+            return;
+        }
+
+        if (result.type === 'merchant') {
+            this.openMerchant(result.merchant);
             this.render();
             return;
         }
@@ -140,6 +148,247 @@ class Game {
                 }
             }
         }, 800);
+    }
+
+    openMerchant(merchant) {
+        this.currentMerchant = merchant;
+        this.activeTab = 'buy';
+        document.getElementById('merchant-overlay').classList.remove('hidden');
+        this.renderMerchant();
+        this.showNotification(`💼 ${merchant.name}：${merchant.greeting}`);
+    }
+
+    closeMerchant() {
+        this.currentMerchant = null;
+        this.selectedItem = null;
+        document.getElementById('merchant-overlay').classList.add('hidden');
+        this.render();
+    }
+
+    renderMerchant() {
+        if (!this.currentMerchant) return;
+
+        const merchant = this.currentMerchant;
+        document.getElementById('merchant-icon').textContent = merchant.icon;
+        document.getElementById('merchant-name').textContent = merchant.name;
+        document.getElementById('merchant-gold').textContent = this.gameState.player.gold;
+
+        ['buy', 'sell', 'upgrade', 'steal'].forEach(tab => {
+            const btn = document.getElementById(`tab-${tab}`);
+            if (tab === this.activeTab) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        this.renderMerchantContent();
+    }
+
+    renderMerchantContent() {
+        const content = document.getElementById('merchant-content');
+        
+        switch (this.activeTab) {
+            case 'buy':
+                this.renderBuyTab(content);
+                break;
+            case 'sell':
+                this.renderSellTab(content);
+                break;
+            case 'upgrade':
+                this.renderUpgradeTab(content);
+                break;
+            case 'steal':
+                this.renderStealTab(content);
+                break;
+        }
+    }
+
+    renderBuyTab(container) {
+        const merchant = this.currentMerchant;
+        if (merchant.inventory.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">商人的货物已经卖完了！</p>';
+            return;
+        }
+
+        let html = '<div class="merchant-items-grid">';
+        merchant.inventory.forEach(item => {
+            const canAfford = this.gameState.player.gold >= item.buyPrice;
+            const rarityClass = `rarity-${item.rarity}`;
+            const disabledClass = canAfford ? '' : 'disabled';
+            
+            html += `
+                <div class="merchant-item ${rarityClass} ${disabledClass}" data-item-id="${item.id}">
+                    <div class="merchant-item-icon">${item.icon}</div>
+                    <div class="merchant-item-name">${item.name}</div>
+                    <div class="merchant-item-price">💰 ${item.buyPrice}</div>
+                    <div class="merchant-item-stats">
+                        ${item.stats?.attack ? `<span>⚔️+${item.stats.attack}</span>` : ''}
+                        ${item.stats?.defense ? `<span>🛡️+${item.stats.defense}</span>` : ''}
+                        ${item.stats?.maxHp ? `<span>❤️+${item.stats.maxHp}</span>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+
+        container.querySelectorAll('.merchant-item:not(.disabled)').forEach(el => {
+            el.addEventListener('click', () => {
+                const itemId = el.dataset.itemId;
+                this.buyItem(itemId);
+            });
+        });
+    }
+
+    renderSellTab(container) {
+        const inventory = this.gameState.player.inventory;
+        if (inventory.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">你的背包是空的！</p>';
+            return;
+        }
+
+        let html = '<div class="merchant-items-grid">';
+        inventory.forEach(item => {
+            const sellPrice = calculateItemSellPrice(item, this.gameState.dungeon.floor);
+            const rarityClass = `rarity-${item.rarity}`;
+            
+            html += `
+                <div class="merchant-item ${rarityClass}" data-item-id="${item.id}">
+                    <div class="merchant-item-icon">${item.icon}</div>
+                    <div class="merchant-item-name">${item.name}</div>
+                    <div class="merchant-item-price" style="color: #2ECC71;">💰 ${sellPrice}</div>
+                    <div class="merchant-item-stats">
+                        ${item.stats?.attack ? `<span>⚔️+${item.stats.attack}</span>` : ''}
+                        ${item.stats?.defense ? `<span>🛡️+${item.stats.defense}</span>` : ''}
+                        ${item.stats?.maxHp ? `<span>❤️+${item.stats.maxHp}</span>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+
+        container.querySelectorAll('.merchant-item').forEach(el => {
+            el.addEventListener('click', () => {
+                const itemId = el.dataset.itemId;
+                this.sellItem(itemId);
+            });
+        });
+    }
+
+    renderUpgradeTab(container) {
+        const floor = this.gameState.dungeon.floor;
+        const merchant = this.currentMerchant;
+        
+        let html = '<div class="upgrade-list">';
+        ATTRIBUTE_TYPES.forEach(attr => {
+            const purchasedCount = merchant.attributePurchased[attr.id] || 0;
+            const price = calculateAttributePrice(attr.id, floor, purchasedCount);
+            const value = calculateAttributeValue(attr.id, floor);
+            const canAfford = this.gameState.player.gold >= price;
+            const disabledClass = canAfford ? '' : 'disabled';
+            
+            html += `
+                <div class="upgrade-item ${disabledClass}" data-attr-id="${attr.id}">
+                    <div class="upgrade-icon">${attr.icon}</div>
+                    <div class="upgrade-info">
+                        <div class="upgrade-name">${attr.name}</div>
+                        <div class="upgrade-desc">${attr.description} (当前:+${value})</div>
+                        <div class="upgrade-count">已购买: ${purchasedCount} 次</div>
+                    </div>
+                    <div class="upgrade-price">💰 ${price}</div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+
+        container.querySelectorAll('.upgrade-item:not(.disabled)').forEach(el => {
+            el.addEventListener('click', () => {
+                const attrId = el.dataset.attrId;
+                this.buyAttribute(attrId);
+            });
+        });
+    }
+
+    renderStealTab(container) {
+        const player = this.gameState.player;
+        const baseSuccessChance = 0.3;
+        const levelMod = player.stats.level * 0.02;
+        const successChance = Math.min(0.6, baseSuccessChance + levelMod);
+        
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px;">
+                <div style="font-size: 3rem; margin-bottom: 20px;">🗡️</div>
+                <h3 style="color: var(--accent-gold); margin-bottom: 15px;">危险操作：盗窃</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 15px;">
+                    尝试从商人那里偷取金币。如果失败，商人会愤怒地攻击你！
+                </p>
+                <p style="margin-bottom: 20px;">
+                    成功率: <span style="color: ${successChance > 0.4 ? '#2ECC71' : '#E74C3C'}">${Math.floor(successChance * 100)}%</span>
+                </p>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 30px;">
+                    成功可获得 ${this.currentMerchant.goldReward} 左右金币<br>
+                    失败将进入战斗，击败商人可获得 ${this.currentMerchant.goldReward} 金币
+                </p>
+                <button id="steal-btn" class="modal-btn" style="background: var(--accent-red); color: white; padding: 12px 30px; font-size: 1.1rem;">
+                    🗡️ 尝试盗窃
+                </button>
+            </div>
+        `;
+
+        const stealBtn = document.getElementById('steal-btn');
+        if (stealBtn) {
+            stealBtn.addEventListener('click', () => this.attemptSteal());
+        }
+    }
+
+    switchMerchantTab(tab) {
+        this.activeTab = tab;
+        this.renderMerchant();
+    }
+
+    buyItem(itemId) {
+        const result = CharacterSystem.buyItem(this.gameState, this.currentMerchant, itemId);
+        this.showNotification(result.message);
+        if (result.success) {
+            this.renderMerchant();
+            this.render();
+        }
+    }
+
+    buyAttribute(attrId) {
+        const result = CharacterSystem.buyAttribute(this.gameState, this.currentMerchant, attrId);
+        this.showNotification(result.message);
+        if (result.success) {
+            this.renderMerchant();
+            this.render();
+        }
+    }
+
+    sellItem(itemId) {
+        const result = CharacterSystem.sellItem(this.gameState, this.currentMerchant, itemId);
+        this.showNotification(result.message);
+        if (result.success) {
+            this.renderMerchant();
+            this.render();
+        }
+    }
+
+    attemptSteal() {
+        if (!confirm('确定要尝试盗窃吗？失败将触发战斗！')) return;
+        
+        const result = CharacterSystem.stealFromMerchant(this.gameState, this.currentMerchant);
+        this.showNotification(result.message);
+        
+        if (result.combat) {
+            this.closeMerchant();
+            this.combatSystem.startCombat(result.enemy);
+            this.render();
+        } else {
+            this.closeMerchant();
+        }
     }
 
     equipItem(itemId) {
@@ -290,6 +539,7 @@ class Game {
         document.getElementById('player-score').textContent = this.gameState.score.toLocaleString();
         document.getElementById('player-kills').textContent = this.gameState.kills;
         document.getElementById('player-floor').textContent = this.gameState.dungeon.floor;
+        document.getElementById('player-gold').textContent = player.gold;
 
         const hpPercent = (player.stats.currentHp / totalStats.maxHp) * 100;
         document.getElementById('hp-text').textContent = `${player.stats.currentHp}/${totalStats.maxHp}`;
@@ -446,6 +696,10 @@ class Game {
                                 break;
                             case 'stairs':
                                 cellContent = '🚪';
+                                break;
+                            case 'merchant':
+                                cellContent = tile.merchant ? tile.merchant.icon : '?';
+                                if (!isVisible) cellContent = '·';
                                 break;
                             default:
                                 cellContent = ' ';
@@ -649,6 +903,23 @@ class Game {
             if (e.target.id === 'item-modal') {
                 this.closeItemModal();
             }
+        });
+
+        document.getElementById('close-merchant-btn').addEventListener('click', () => {
+            this.closeMerchant();
+        });
+
+        document.getElementById('merchant-overlay').addEventListener('click', (e) => {
+            if (e.target.id === 'merchant-overlay') {
+                this.closeMerchant();
+            }
+        });
+
+        ['tab-buy', 'tab-sell', 'tab-upgrade', 'tab-steal'].forEach(tabId => {
+            document.getElementById(tabId).addEventListener('click', () => {
+                const tab = tabId.replace('tab-', '');
+                this.switchMerchantTab(tab);
+            });
         });
 
         document.addEventListener('keydown', (e) => {

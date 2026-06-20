@@ -75,6 +75,10 @@
                             <span class="stat-label">层数</span>
                             <span class="stat-value" id="player-floor">1</span>
                         </div>
+                        <div class="stat-row">
+                            <span class="stat-label">💰 金币</span>
+                            <span class="stat-value" id="player-gold" style="color: var(--accent-gold);">50</span>
+                        </div>
                     </div>
                     <div class="bar-container">
                         <div class="bar-label">
@@ -240,6 +244,33 @@
                 <button class="modal-btn" id="discard-btn">丢弃</button>
                 <button class="modal-btn" id="close-modal-btn">关闭</button>
             </div>
+        </div>
+    </div>
+
+    <div id="merchant-overlay" class="modal hidden">
+        <div class="modal-content merchant-modal">
+            <div class="merchant-header">
+                <div class="merchant-avatar">
+                    <span id="merchant-icon">🧙‍♂️</span>
+                </div>
+                <div class="merchant-title">
+                    <h3 class="modal-title" id="merchant-name">流浪商人</h3>
+                    <div class="merchant-gold-display">
+                        <span>💰 你的金币: </span>
+                        <span id="merchant-gold" style="color: var(--accent-gold);">50</span>
+                    </div>
+                </div>
+                <button class="close-btn" id="close-merchant-btn">✕</button>
+            </div>
+            
+            <div class="merchant-tabs">
+                <button class="merchant-tab active" id="tab-buy">🛒 购买装备</button>
+                <button class="merchant-tab" id="tab-sell">📤 出售物品</button>
+                <button class="merchant-tab" id="tab-upgrade">💪 购买属性</button>
+                <button class="merchant-tab" id="tab-steal">🗡️ 盗窃</button>
+            </div>
+            
+            <div class="merchant-content" id="merchant-content"></div>
         </div>
     </div>
 

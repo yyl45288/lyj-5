@@ -144,6 +144,12 @@ class CombatSystem {
       this.addCombatLog(`✨ 获得 ${expGain} 经验值，${scoreGain} 积分！`);
     }
 
+    const goldDrop = CharacterSystem.getGoldDropFromEnemy(enemy);
+    if (goldDrop > 0) {
+      this.gameState.player.gold += goldDrop;
+      this.addCombatLog(`💰 获得 ${goldDrop} 金币！`);
+    }
+
     const weatherTriggerResult = this.tryWeatherOnKill(enemy);
     if (weatherTriggerResult) {
       this.addCombatLog(weatherTriggerResult.message);
@@ -164,6 +170,7 @@ class CombatSystem {
       type: 'victory',
       expGain,
       scoreGain,
+      goldDrop,
       droppedItem,
       levelUp: levelResult,
       weatherTriggered: weatherTriggerResult

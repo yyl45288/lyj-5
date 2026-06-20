@@ -14,6 +14,7 @@ class DungeonGenerator {
     this.placeStairs();
     this.placeEnemies();
     this.placeItems();
+    this.placeMerchants();
     this.placePlayer();
     return this.createDungeonMap();
   }
@@ -26,7 +27,8 @@ class DungeonGenerator {
           type: 'wall',
           explored: false,
           enemy: null,
-          item: null
+          item: null,
+          merchant: null
         };
       }
     }
@@ -175,7 +177,31 @@ class DungeonGenerator {
   isValidPlacement(x, y) {
     if (y < 0 || y >= this.height || x < 0 || x >= this.width) return false;
     const tile = this.tiles[y][x];
-    return tile.type === 'floor' && !tile.enemy && !tile.item;
+    return tile.type === 'floor' && !tile.enemy && !tile.item && !tile.merchant;
+  }
+
+  placeMerchants() {
+    const merchantChance = 0.4 + Math.min(this.floor * 0.05, 0.3);
+    if (Math.random() > merchantChance) return;
+
+    const merchantCount = 1 + Math.floor(Math.random() * Math.min(3, Math.floor(this.floor / 3) + 1));
+    let placed = 0;
+    let attempts = 0;
+
+    while (placed < merchantCount && attempts < 100) {
+      attempts++;
+      const room = this.rooms[Math.floor(Math.random() * this.rooms.length)];
+      if (!room) continue;
+
+      const x = Math.floor(Math.random() * (room.width - 2)) + room.x + 1;
+      const y = Math.floor(Math.random() * (room.height - 2)) + room.y + 1;
+
+      if (this.isValidPlacement(x, y)) {
+        this.tiles[y][x].type = 'merchant';
+        this.tiles[y][x].merchant = generateMerchant(this.floor);
+        placed++;
+      }
+    }
   }
 
   placePlayer() {

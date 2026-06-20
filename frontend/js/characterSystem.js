@@ -15,6 +15,7 @@ class CharacterSystem {
         exp: 0,
         expToNext: 100
       },
+      gold: 50,
       position: { x: 0, y: 0 },
       equipment: {
         weapon: null,
@@ -23,6 +24,25 @@ class CharacterSystem {
       },
       inventory: inventory
     };
+  }
+
+  static ensureGameStateCompatibility(gameState) {
+    if (!gameState.player.gold) {
+      gameState.player.gold = 50;
+    }
+    
+    if (gameState.dungeon && gameState.dungeon.tiles) {
+      for (let y = 0; y < gameState.dungeon.tiles.length; y++) {
+        for (let x = 0; x < gameState.dungeon.tiles[y].length; x++) {
+          const tile = gameState.dungeon.tiles[y][x];
+          if (tile.merchant === undefined) {
+            tile.merchant = null;
+          }
+        }
+      }
+    }
+    
+    return gameState;
   }
 
   static createNewGameState() {
@@ -121,6 +141,17 @@ class CharacterSystem {
         return { type: 'death' };
       }
       return { type: 'encounter', enemy: tile.enemy, position: { x: newX, y: newY } };
+    }
+
+    if (tile.type === 'merchant' && tile.merchant) {
+      player.position = { x: newX, y: newY };
+      WeatherSystem.tickWeatherDuration(gameState.weatherState, 1);
+      const expiredWeathers = WeatherSystem.tickWeatherDuration(gameState.weatherState, 0);
+      this.handleExpiredWeathers(gameState, expiredWeathers);
+      if (player.stats.currentHp <= 0) {
+        return { type: 'death' };
+      }
+      return { type: 'merchant', merchant: tile.merchant, position: { x: newX, y: newY } };
     }
 
     if (tile.type === 'item' && tile.item) {
@@ -494,5 +525,142 @@ class CharacterSystem {
     }
 
     return { attack, defense, maxHp };
+  }
+
+  static buyItem(gameState, merchant, itemId) {
+    const player = gameState.player;
+    const itemIndex = merchant.inventory.findIndex(item => item.id === itemId);
+    
+    if (itemIndex === -1) {
+      return { success: false, message: '商品不存在！' };
+    }
+
+    const item = merchant.inventory[itemIndex];
+    const price = item.buyPrice;
+
+    if (player.gold < price) {
+      return { success: false, message: '金币不足！' };
+    }
+
+    if (player.inventory.length >= 20) {
+      return { success: false, message: '背包已满！' };
+    }
+
+    player.gold -= price;
+    const purchasedItem = { ...item };
+    delete purchasedItem.buyPrice;
+    delete purchasedItem.sellPrice;
+    player.inventory.push(purchasedItem);
+    merchant.inventory.splice(itemIndex, 1);
+
+    gameState.gameLog.push(`💰 购买了 ${item.icon} ${item.name}，花费 ${price} 金币！`);
+    return { success: true, item: purchasedItem, price, message: `购买成功！花费 ${price} 金币。` };
+  }
+
+  static buyAttribute(gameState, merchant, attrType) {
+    const player = gameState.player;
+    const purchasedCount = merchant.attributePurchased[attrType] || 0;
+    const price = calculateAttributePrice(attrType, gameState.dungeon.floor, purchasedCount);
+    const value = calculateAttributeValue(attrType, gameState.dungeon.floor);
+
+    if (player.gold < price) {
+      return { success: false, message: '金币不足！' };
+    }
+
+    player.gold -= price;
+    player.stats[attrType] += value;
+    
+    if (attrType === 'maxHp') {
+      player.stats.currentHp += value;
+    }
+
+    merchant.attributePurchased[attrType] = purchasedCount + 1;
+
+    const attrData = ATTRIBUTE_TYPES.find(a => a.id === attrType);
+    gameState.gameLog.push(`💪 购买了 ${attrData.icon} ${attrData.name} +${value}，花费 ${price} 金币！`);
+    return { success: true, attrType, value, price, message: `购买成功！${attrData.name} +${value}，花费 ${price} 金币。` };
+  }
+
+  static sellItem(gameState, merchant, itemId) {
+    const player = gameState.player;
+    const itemIndex = player.inventory.findIndex(item => item.id === itemId);
+    
+    if (itemIndex === -1) {
+      return { success: false, message: '物品不存在！' };
+    }
+
+    const item = player.inventory[itemIndex];
+    const price = calculateItemSellPrice(item, gameState.dungeon.floor);
+
+    player.gold += price;
+    player.inventory.splice(itemIndex, 1);
+
+    gameState.gameLog.push(`💰 出售了 ${item.icon} ${item.name}，获得 ${price} 金币！`);
+    return { success: true, item, price, message: `出售成功！获得 ${price} 金币。` };
+  }
+
+  static stealFromMerchant(gameState, merchant) {
+    const player = gameState.player;
+    
+    const baseSuccessChance = 0.3;
+    const levelMod = player.stats.level * 0.02;
+    const luckMod = Math.random() * 0.2;
+    const successChance = Math.min(0.6, baseSuccessChance + levelMod + luckMod);
+
+    if (Math.random() < successChance) {
+      const goldAmount = Math.floor(merchant.goldReward * (0.5 + Math.random() * 0.5));
+      player.gold += goldAmount;
+      
+      gameState.gameLog.push(`🗡️ 盗窃成功！获得 ${goldAmount} 金币！商人逃走了。`);
+      
+      const dungeon = gameState.dungeon;
+      for (let y = 0; y < dungeon.height; y++) {
+        for (let x = 0; x < dungeon.width; x++) {
+          if (dungeon.tiles[y][x].merchant && dungeon.tiles[y][x].merchant.id === merchant.id) {
+            dungeon.tiles[y][x].type = 'floor';
+            dungeon.tiles[y][x].merchant = null;
+            break;
+          }
+        }
+      }
+      
+      return { success: true, gold: goldAmount, combat: false, message: `盗窃成功！获得 ${goldAmount} 金币！` };
+    } else {
+      gameState.gameLog.push(`❌ 盗窃失败！商人发现了你，愤怒地发起攻击！`);
+      
+      const scaleFactor = 1 + (gameState.dungeon.floor - 1) * 0.15;
+      const merchantEnemy = {
+        id: `merchant_enemy_${Date.now()}`,
+        name: `愤怒的${merchant.name}`,
+        icon: merchant.icon,
+        maxHp: Math.floor(60 * scaleFactor),
+        currentHp: Math.floor(60 * scaleFactor),
+        attack: Math.floor(12 * scaleFactor),
+        defense: Math.floor(5 * scaleFactor),
+        expReward: merchant.expReward,
+        dropRate: 0.5,
+        goldReward: merchant.goldReward
+      };
+
+      const dungeon = gameState.dungeon;
+      for (let y = 0; y < dungeon.height; y++) {
+        for (let x = 0; x < dungeon.width; x++) {
+          if (dungeon.tiles[y][x].merchant && dungeon.tiles[y][x].merchant.id === merchant.id) {
+            dungeon.tiles[y][x].type = 'floor';
+            dungeon.tiles[y][x].merchant = null;
+            break;
+          }
+        }
+      }
+      
+      return { success: false, combat: true, enemy: merchantEnemy, message: '盗窃失败！商人发起攻击！' };
+    }
+  }
+
+  static getGoldDropFromEnemy(enemy) {
+    if (enemy.goldReward) {
+      return enemy.goldReward;
+    }
+    return getRandomGoldAmount(1);
   }
 }
