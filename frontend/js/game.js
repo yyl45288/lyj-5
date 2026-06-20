@@ -6,6 +6,7 @@ class Game {
         this.autoSaveTimer = null;
         this.currentMerchant = null;
         this.activeTab = 'buy';
+        this.isMinimapMaximized = false;
     }
 
     async startNewGame() {
@@ -674,6 +675,7 @@ class Game {
         this.renderPlayerStats();
         this.renderWeatherPanel();
         this.renderMap();
+        this.renderMinimap();
         this.renderInventory();
         this.renderQuests();
         this.renderCombo();
@@ -869,6 +871,87 @@ class Game {
         }
 
         mapElement.innerHTML = html;
+    }
+
+    renderMinimap() {
+        const dungeon = this.gameState.dungeon;
+        const player = this.gameState.player;
+        const minimapElement = document.getElementById('minimap');
+        const toggleText = document.getElementById('minimap-toggle');
+
+        toggleText.textContent = this.isMinimapMaximized ? '✕ 点击缩小' : '🔍 点击放大';
+
+        minimapElement.style.gridTemplateColumns = `repeat(${dungeon.width}, auto)`;
+
+        let html = '';
+        for (let y = 0; y < dungeon.height; y++) {
+            for (let x = 0; x < dungeon.width; x++) {
+                const tile = dungeon.tiles[y][x];
+                const isPlayer = x === player.position.x && y === player.position.y;
+
+                let cellClass = 'minimap-cell';
+                let cellContent = '';
+
+                if (isPlayer) {
+                    cellClass += ' player';
+                    if (tile.explored) {
+                        cellClass += ' explored';
+                        if (tile.type !== 'wall') cellClass += ` ${tile.type}`;
+                    }
+                    cellContent = this.isMinimapMaximized ? '🧙' : '';
+                } else if (!tile.explored) {
+                    cellClass += ' unexplored';
+                } else {
+                    cellClass += ` ${tile.type}`;
+                    cellClass += ' explored';
+
+                    switch (tile.type) {
+                        case 'enemy':
+                            if (tile.enemy) {
+                                cellContent = this.isMinimapMaximized ? tile.enemy.icon : '';
+                            }
+                            break;
+                        case 'merchant':
+                            if (tile.merchant) {
+                                cellContent = this.isMinimapMaximized ? tile.merchant.icon : '';
+                            }
+                            break;
+                        case 'stairs':
+                            cellContent = this.isMinimapMaximized ? '🚪' : '';
+                            break;
+                        case 'item':
+                            if (tile.item) {
+                                cellContent = this.isMinimapMaximized ? tile.item.icon : '';
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                }
+
+                html += `<div class="${cellClass}">${cellContent}</div>`;
+            }
+        }
+
+        minimapElement.innerHTML = html;
+    }
+
+    toggleMinimap() {
+        this.isMinimapMaximized = !this.isMinimapMaximized;
+        const container = document.getElementById('minimap-container');
+        const overlay = document.getElementById('minimap-overlay');
+
+        if (this.isMinimapMaximized) {
+            container.classList.remove('minimap-minimized');
+            container.classList.add('minimap-maximized');
+            overlay.classList.add('active');
+        } else {
+            container.classList.remove('minimap-maximized');
+            container.classList.add('minimap-minimized');
+            overlay.classList.remove('active');
+        }
+
+        this.renderMinimap();
     }
 
     renderInventory() {
@@ -1138,6 +1221,22 @@ class Game {
                 this.switchMerchantTab(tab);
             });
         });
+
+        const minimapHeader = document.querySelector('.minimap-header');
+        if (minimapHeader) {
+            minimapHeader.addEventListener('click', () => {
+                this.toggleMinimap();
+            });
+        }
+
+        const minimapOverlay = document.getElementById('minimap-overlay');
+        if (minimapOverlay) {
+            minimapOverlay.addEventListener('click', () => {
+                if (this.isMinimapMaximized) {
+                    this.toggleMinimap();
+                }
+            });
+        }
 
         document.addEventListener('keydown', (e) => {
             if (!this.gameState) return;

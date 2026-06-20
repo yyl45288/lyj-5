@@ -91,6 +91,8 @@ class CharacterSystem {
     }
     gameState.gameLog.push(`📜 新任务已发布，完成任务可获得金币奖励！`);
 
+    this.exploreArea(dungeon, player.position.x, player.position.y, gameState);
+
     return gameState;
   }
 

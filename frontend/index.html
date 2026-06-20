@@ -131,6 +131,20 @@
             </div>
 
             <div class="center-panel">
+                <div id="minimap-container" class="minimap-container minimap-minimized">
+                    <div class="minimap-header">
+                        <span class="minimap-title">🗺️ 本层地图</span>
+                        <span class="minimap-toggle" id="minimap-toggle">🔍 点击放大</span>
+                    </div>
+                    <div id="minimap" class="minimap"></div>
+                    <div class="minimap-legend">
+                        <span class="legend-item"><span class="legend-dot legend-player"></span>玩家</span>
+                        <span class="legend-item"><span class="legend-dot legend-enemy"></span>怪物</span>
+                        <span class="legend-item"><span class="legend-dot legend-merchant"></span>商人</span>
+                        <span class="legend-item"><span class="legend-dot legend-stairs"></span>楼梯</span>
+                    </div>
+                </div>
+
                 <div id="map-container" class="map-container">
                     <div id="game-map" class="game-map"></div>
                 </div>
@@ -297,6 +311,8 @@
             </div>
         </div>
     </div>
+
+    <div id="minimap-overlay" class="minimap-maximized-overlay"></div>
 
     <div id="notification" class="notification hidden"></div>
 
