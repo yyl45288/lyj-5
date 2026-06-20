@@ -175,24 +175,29 @@ class CombatSystem {
     const isElite = enemy.expReward >= 80 * (1 + (floor - 1) * 0.15);
     const isBoss = enemy.expReward >= 150 * (1 + (floor - 1) * 0.15);
     
-    let triggerChance = 0.15;
-    let positiveBias = 0;
-    let durationMultiplier = 0.5;
+    let triggerChance = 0.08;
+    let positiveBias = 0.3;
+    let durationMultiplier = 0.4;
 
     if (isElite) {
-      triggerChance = 0.4;
-      positiveBias = 0.5;
-      durationMultiplier = 0.7;
+      triggerChance = 0.25;
+      positiveBias = 0.7;
+      durationMultiplier = 0.5;
     }
     
     if (isBoss) {
-      triggerChance = 0.7;
-      positiveBias = 1;
-      durationMultiplier = 1;
+      triggerChance = 0.5;
+      positiveBias = 1.2;
+      durationMultiplier = 0.8;
     }
 
-    if (this.gameState.weatherState.activeWeathers.length >= 3) {
-      triggerChance *= 0.3;
+    if (this.gameState.weatherState.activeWeathers.length >= 2) {
+      triggerChance *= 0.2;
+    }
+
+    const hasWeatherProtection = CharacterSystem.hasWeatherProtection(this.gameState);
+    if (hasWeatherProtection && !isBoss && Math.random() < 0.6) {
+      return null;
     }
 
     if (Math.random() > triggerChance) return null;

@@ -37,20 +37,20 @@ const WEATHER_DATA = {
     id: WEATHER_TYPES.ACID_RAIN,
     name: '酸雨',
     icon: '🌧️',
-    description: '腐蚀性酸雨持续滴落，每步损失少量生命，防御力下降。',
+    description: '腐蚀性酸雨持续滴落，每步损失1点生命，防御力略微下降。',
     color: '#27AE60',
-    rarity: 0.12,
+    rarity: 0.10,
     effects: {
       mapClass: 'weather-acid-rain',
-      moveHpChange: -2,
+      moveHpChange: -1,
       moveBlockChance: 0,
       viewRangeMod: 0,
       attackMod: 0,
-      defenseMod: -2,
+      defenseMod: -1,
       critChanceMod: 0,
       enemyAttackMod: 0,
       enemyDefenseMod: -1,
-      expBonus: 0,
+      expBonus: 0.05,
       damageChance: 0,
       damageAmount: 0
     }
@@ -59,20 +59,20 @@ const WEATHER_DATA = {
     id: WEATHER_TYPES.GRAVITY_ANOMALY,
     name: '重力异常',
     icon: '🌀',
-    description: '空间扭曲导致重力异常，移动有概率失败，攻击力下降。',
+    description: '空间扭曲导致重力异常，移动小概率失败，攻击力略微下降。',
     color: '#9B59B6',
-    rarity: 0.10,
+    rarity: 0.08,
     effects: {
       mapClass: 'weather-gravity',
       moveHpChange: 0,
-      moveBlockChance: 0.15,
+      moveBlockChance: 0.08,
       viewRangeMod: 0,
-      attackMod: -3,
+      attackMod: -1,
       defenseMod: 0,
       critChanceMod: 0,
-      enemyAttackMod: -1,
+      enemyAttackMod: -2,
       enemyDefenseMod: 0,
-      expBonus: 0,
+      expBonus: 0.08,
       damageChance: 0,
       damageAmount: 0
     }
@@ -81,20 +81,20 @@ const WEATHER_DATA = {
     id: WEATHER_TYPES.EXTREME_COLD,
     name: '极寒',
     icon: '❄️',
-    description: '刺骨寒气侵袭，暴击率降低，移动有概率被冰冻停滞。',
+    description: '刺骨寒气侵袭，暴击率略微降低，移动极小概率被冰冻。敌人行动也变迟缓。',
     color: '#3498DB',
-    rarity: 0.10,
+    rarity: 0.08,
     effects: {
       mapClass: 'weather-extreme-cold',
-      moveHpChange: -1,
-      moveBlockChance: 0.10,
+      moveHpChange: 0,
+      moveBlockChance: 0.05,
       viewRangeMod: 0,
       attackMod: 0,
       defenseMod: 0,
-      critChanceMod: -0.05,
-      enemyAttackMod: 0,
+      critChanceMod: -0.02,
+      enemyAttackMod: -1,
       enemyDefenseMod: 1,
-      expBonus: 0,
+      expBonus: 0.05,
       damageChance: 0,
       damageAmount: 0
     }
@@ -103,20 +103,20 @@ const WEATHER_DATA = {
     id: WEATHER_TYPES.MAGMA_HEAT,
     name: '熔岩热浪',
     icon: '🔥',
-    description: '地热涌动，每步灼伤，但攻击力大幅提升。',
+    description: '地热涌动，每步轻微灼伤，但攻击力显著提升，经验获取增加。',
     color: '#E74C3C',
-    rarity: 0.08,
+    rarity: 0.06,
     effects: {
       mapClass: 'weather-magma-heat',
-      moveHpChange: -3,
+      moveHpChange: -1,
       moveBlockChance: 0,
       viewRangeMod: 0,
-      attackMod: 5,
-      defenseMod: -1,
-      critChanceMod: 0.03,
-      enemyAttackMod: 2,
+      attackMod: 3,
+      defenseMod: 0,
+      critChanceMod: 0.02,
+      enemyAttackMod: 1,
       enemyDefenseMod: 0,
-      expBonus: 0,
+      expBonus: 0.15,
       damageChance: 0,
       damageAmount: 0
     }
@@ -125,20 +125,20 @@ const WEATHER_DATA = {
     id: WEATHER_TYPES.THICK_FOG,
     name: '迷雾',
     icon: '💨',
-    description: '浓雾弥漫，视野范围大幅缩小。',
+    description: '浓雾弥漫，视野范围略有缩小，但敌人也难以瞄准。',
     color: '#7F8C8D',
-    rarity: 0.12,
+    rarity: 0.10,
     effects: {
       mapClass: 'weather-thick-fog',
       moveHpChange: 0,
       moveBlockChance: 0,
-      viewRangeMod: -2,
+      viewRangeMod: -1,
       attackMod: 0,
       defenseMod: 0,
       critChanceMod: 0,
-      enemyAttackMod: 0,
-      enemyDefenseMod: 1,
-      expBonus: 0,
+      enemyAttackMod: -1,
+      enemyDefenseMod: 0,
+      expBonus: 0.1,
       damageChance: 0,
       damageAmount: 0
     }
@@ -147,42 +147,42 @@ const WEATHER_DATA = {
     id: WEATHER_TYPES.THUNDERSTORM,
     name: '雷电风暴',
     icon: '⚡',
-    description: '雷电交加，移动有概率被雷击。暴击率提升。',
+    description: '雷电交加，极小概率被雷击。暴击率大幅提升，经验奖励丰厚。',
     color: '#F39C12',
-    rarity: 0.08,
+    rarity: 0.06,
     effects: {
       mapClass: 'weather-thunderstorm',
       moveHpChange: 0,
       moveBlockChance: 0,
       viewRangeMod: 0,
-      attackMod: 2,
+      attackMod: 3,
       defenseMod: 0,
-      critChanceMod: 0.08,
-      enemyAttackMod: 1,
-      enemyDefenseMod: 0,
-      expBonus: 0.1,
-      damageChance: 0.10,
-      damageAmount: 5
+      critChanceMod: 0.06,
+      enemyAttackMod: 0,
+      enemyDefenseMod: -1,
+      expBonus: 0.2,
+      damageChance: 0.05,
+      damageAmount: 3
     }
   },
   [WEATHER_TYPES.DIVINE_LIGHT]: {
     id: WEATHER_TYPES.DIVINE_LIGHT,
     name: '神圣光辉',
     icon: '🌿',
-    description: '神圣光芒照耀，每步恢复生命，防御力提升。',
+    description: '神圣光芒照耀，每步恢复生命，防御和视野提升，敌人变弱。',
     color: '#2ECC71',
-    rarity: 0.05,
+    rarity: 0.04,
     effects: {
       mapClass: 'weather-divine-light',
-      moveHpChange: 3,
+      moveHpChange: 2,
       moveBlockChance: 0,
       viewRangeMod: 1,
-      attackMod: 0,
-      defenseMod: 3,
-      critChanceMod: 0.02,
-      enemyAttackMod: -1,
-      enemyDefenseMod: 0,
-      expBonus: 0.15,
+      attackMod: 1,
+      defenseMod: 2,
+      critChanceMod: 0.03,
+      enemyAttackMod: -2,
+      enemyDefenseMod: -1,
+      expBonus: 0.2,
       damageChance: 0,
       damageAmount: 0
     }
@@ -191,20 +191,20 @@ const WEATHER_DATA = {
     id: WEATHER_TYPES.UNDEAD_FOG,
     name: '亡灵之雾',
     icon: '👻',
-    description: '亡灵雾气弥漫，敌人变强，但击杀经验奖励增加。',
+    description: '亡灵雾气弥漫，敌人变强，但击杀经验和掉落率大幅提升。',
     color: '#8E44AD',
-    rarity: 0.07,
+    rarity: 0.05,
     effects: {
       mapClass: 'weather-undead-fog',
-      moveHpChange: -1,
+      moveHpChange: 0,
       moveBlockChance: 0,
       viewRangeMod: -1,
       attackMod: 0,
-      defenseMod: -1,
+      defenseMod: 0,
       critChanceMod: 0,
-      enemyAttackMod: 3,
-      enemyDefenseMod: 2,
-      expBonus: 0.3,
+      enemyAttackMod: 1,
+      enemyDefenseMod: 1,
+      expBonus: 0.35,
       damageChance: 0,
       damageAmount: 0
     }
@@ -215,14 +215,59 @@ class WeatherSystem {
   static createEmptyWeather() {
     return {
       activeWeathers: [],
-      weatherTimers: {}
+      weatherTimers: {},
+      shields: {
+        weatherResist: 0,
+        weatherShield: 0
+      }
     };
   }
 
-  static generateWeatherForFloor(floor) {
+  static tickWeatherShields(weatherState, moves = 1) {
+    if (!weatherState.shields) return;
+    
+    if (weatherState.shields.weatherResist > 0) {
+      weatherState.shields.weatherResist = Math.max(0, weatherState.shields.weatherResist - moves);
+    }
+    if (weatherState.shields.weatherShield > 0) {
+      weatherState.shields.weatherShield = Math.max(0, weatherState.shields.weatherShield - moves);
+    }
+  }
+
+  static hasWeatherResist(weatherState) {
+    return weatherState.shields && weatherState.shields.weatherResist > 0;
+  }
+
+  static hasWeatherShield(weatherState) {
+    return weatherState.shields && weatherState.shields.weatherShield > 0;
+  }
+
+  static addWeatherResist(weatherState, duration) {
+    if (!weatherState.shields) weatherState.shields = { weatherResist: 0, weatherShield: 0 };
+    weatherState.shields.weatherResist = Math.max(weatherState.shields.weatherResist, duration);
+  }
+
+  static addWeatherShield(weatherState, duration) {
+    if (!weatherState.shields) weatherState.shields = { weatherResist: 0, weatherShield: 0 };
+    weatherState.shields.weatherShield = Math.max(weatherState.shields.weatherShield, duration);
+  }
+
+  static generateWeatherForFloor(floor, gameState = null) {
     const weatherState = this.createEmptyWeather();
 
-    const weatherChance = Math.min(0.25 + floor * 0.03, 0.70);
+    let baseChance = 0.15 + floor * 0.02;
+    
+    if (gameState) {
+      const kills = gameState.kills || 0;
+      const moveCount = gameState.moveCount || 0;
+      if (kills > 10) baseChance += 0.05;
+      if (kills > 25) baseChance += 0.05;
+      if (moveCount > 100) baseChance += 0.03;
+      if (moveCount > 200) baseChance += 0.03;
+    }
+    
+    const weatherChance = Math.min(baseChance, 0.45);
+    
     if (Math.random() >= weatherChance) {
       return weatherState;
     }
@@ -230,7 +275,8 @@ class WeatherSystem {
     const availableWeathers = Object.values(WEATHER_DATA).filter(w => w.rarity > 0);
     const totalRarity = availableWeathers.reduce((sum, w) => sum + w.rarity, 0);
 
-    const numWeathers = Math.random() < 0.15 + floor * 0.01 ? 2 : 1;
+    const multiWeatherChance = Math.min(0.08 + floor * 0.005, 0.20);
+    const numWeathers = Math.random() < multiWeatherChance ? 2 : 1;
     const selectedWeathers = [];
 
     for (let i = 0; i < numWeathers; i++) {
@@ -400,65 +446,156 @@ class WeatherSystem {
       messages: []
     };
 
-    if (effects.moveBlockChance > 0 && Math.random() < effects.moveBlockChance) {
+    const hasShield = this.hasWeatherShield(gameState.weatherState);
+    const hasResist = this.hasWeatherResist(gameState.weatherState);
+    const accessory = player.equipment.accessory || {};
+    const ignoreMoveBlock = accessory.ignoreWeatherMoveBlock || false;
+    const weatherDamageResist = accessory.weatherDamageResist || 0;
+
+    let moveBlockChance = effects.moveBlockChance;
+    let moveHpChange = effects.moveHpChange;
+    let damageChance = effects.damageChance;
+    let damageAmount = effects.damageAmount;
+
+    if (hasShield) {
+      if (moveBlockChance > 0) result.messages.push('🛡️ 天气护盾抵御了移动阻碍！');
+      if (moveHpChange < 0) result.messages.push('🛡️ 天气护盾抵御了天气伤害！');
+      moveBlockChance = 0;
+      moveHpChange = Math.max(0, moveHpChange);
+      damageChance = 0;
+    } else if (hasResist) {
+      if (ignoreMoveBlock && moveBlockChance > 0) {
+        result.messages.push('🧥 风行斗篷让你不受天气阻碍！');
+        moveBlockChance = 0;
+      }
+      if (moveHpChange < 0) {
+        const resisted = Math.ceil(-moveHpChange * 0.5);
+        result.messages.push(`🧪 天气抗性药剂抵御了 ${resisted} 点伤害！`);
+        moveHpChange = -Math.ceil(-moveHpChange * 0.5);
+      }
+      damageChance *= 0.3;
+      damageAmount = Math.ceil(damageAmount * 0.5);
+    } else {
+      if (ignoreMoveBlock && moveBlockChance > 0) {
+        result.messages.push('🧥 风行斗篷让你不受天气阻碍！');
+        moveBlockChance = 0;
+      }
+      if (weatherDamageResist > 0 && moveHpChange < 0) {
+        const resisted = Math.ceil(-moveHpChange * weatherDamageResist);
+        result.messages.push(`🌟 星辰护符抵御了 ${resisted} 点伤害！`);
+        moveHpChange = -Math.ceil(-moveHpChange * (1 - weatherDamageResist));
+      }
+      if (weatherDamageResist > 0) {
+        damageAmount = Math.ceil(damageAmount * (1 - weatherDamageResist));
+      }
+    }
+
+    if (moveBlockChance > 0 && Math.random() < moveBlockChance) {
       result.blocked = true;
       result.messages.push('⛔ 你被天气影响，无法移动！');
       return result;
     }
 
-    if (effects.moveHpChange !== 0) {
-      result.hpChange = effects.moveHpChange;
+    if (moveHpChange !== 0) {
+      result.hpChange = moveHpChange;
       player.stats.currentHp = Math.max(0, Math.min(
         CharacterSystem.getPlayerTotalStats(gameState).maxHp,
-        player.stats.currentHp + effects.moveHpChange
+        player.stats.currentHp + moveHpChange
       ));
-      if (effects.moveHpChange > 0) {
-        result.messages.push(`💚 天气效果恢复了 ${effects.moveHpChange} 点生命！`);
+      if (moveHpChange > 0) {
+        result.messages.push(`💚 天气效果恢复了 ${moveHpChange} 点生命！`);
       } else {
-        result.messages.push(`💔 天气效果造成了 ${Math.abs(effects.moveHpChange)} 点伤害！`);
+        result.messages.push(`💔 天气效果造成了 ${Math.abs(moveHpChange)} 点伤害！`);
       }
     }
 
-    if (effects.damageChance > 0 && Math.random() < effects.damageChance) {
-      result.extraDamage = effects.damageAmount;
-      player.stats.currentHp = Math.max(0, player.stats.currentHp - effects.damageAmount);
-      result.messages.push(`⚡ 闪电击中了你！造成 ${effects.damageAmount} 点伤害！`);
+    if (damageChance > 0 && Math.random() < damageChance) {
+      result.extraDamage = damageAmount;
+      player.stats.currentHp = Math.max(0, player.stats.currentHp - damageAmount);
+      result.messages.push(`⚡ 闪电击中了你！造成 ${damageAmount} 点伤害！`);
     }
+
+    this.tickWeatherShields(gameState.weatherState, 1);
 
     return result;
   }
 
   static applyCombatAttackMods(gameState, baseAttack, isPlayer) {
     const effects = this.getCombinedEffects(gameState.weatherState);
+    const hasShield = this.hasWeatherShield(gameState.weatherState);
+    const hasResist = this.hasWeatherResist(gameState.weatherState);
+    const accessory = gameState.player.equipment.accessory || {};
+    const weatherDamageResist = accessory.weatherDamageResist || 0;
+
     if (isPlayer) {
-      return Math.max(1, baseAttack + effects.attackMod);
+      let attackMod = effects.attackMod;
+      if (hasShield && attackMod < 0) attackMod = 0;
+      if (hasResist && attackMod < 0) attackMod = Math.ceil(attackMod * 0.5);
+      return Math.max(1, baseAttack + attackMod);
     } else {
-      return Math.max(1, baseAttack + effects.enemyAttackMod);
+      let enemyAttackMod = effects.enemyAttackMod;
+      if (hasShield && enemyAttackMod > 0) enemyAttackMod = 0;
+      if (hasResist && enemyAttackMod > 0) enemyAttackMod = Math.ceil(enemyAttackMod * 0.5);
+      if (weatherDamageResist > 0 && enemyAttackMod > 0) {
+        enemyAttackMod = Math.ceil(enemyAttackMod * (1 - weatherDamageResist * 0.5));
+      }
+      return Math.max(1, baseAttack + enemyAttackMod);
     }
   }
 
   static applyCombatDefenseMods(gameState, baseDefense, isPlayer) {
     const effects = this.getCombinedEffects(gameState.weatherState);
+    const hasShield = this.hasWeatherShield(gameState.weatherState);
+    const hasResist = this.hasWeatherResist(gameState.weatherState);
+    const accessory = gameState.player.equipment.accessory || {};
+    const weatherDamageResist = accessory.weatherDamageResist || 0;
+
     if (isPlayer) {
-      return Math.max(0, baseDefense + effects.defenseMod);
+      let defenseMod = effects.defenseMod;
+      if (hasShield && defenseMod < 0) defenseMod = 0;
+      if (hasResist && defenseMod < 0) defenseMod = Math.ceil(defenseMod * 0.5);
+      return Math.max(0, baseDefense + defenseMod);
     } else {
-      return Math.max(0, baseDefense + effects.enemyDefenseMod);
+      let enemyDefenseMod = effects.enemyDefenseMod;
+      if (hasShield && enemyDefenseMod > 0) enemyDefenseMod = 0;
+      if (hasResist && enemyDefenseMod > 0) enemyDefenseMod = Math.ceil(enemyDefenseMod * 0.5);
+      if (weatherDamageResist > 0 && enemyDefenseMod > 0) {
+        enemyDefenseMod = Math.ceil(enemyDefenseMod * (1 - weatherDamageResist * 0.5));
+      }
+      return Math.max(0, baseDefense + enemyDefenseMod);
     }
   }
 
   static applyCritChanceMod(gameState, baseCritChance) {
     const effects = this.getCombinedEffects(gameState.weatherState);
-    return Math.max(0.01, Math.min(0.5, baseCritChance + effects.critChanceMod));
+    const hasShield = this.hasWeatherShield(gameState.weatherState);
+    const hasResist = this.hasWeatherResist(gameState.weatherState);
+    
+    let critChanceMod = effects.critChanceMod;
+    if (hasShield && critChanceMod < 0) critChanceMod = 0;
+    if (hasResist && critChanceMod < 0) critChanceMod *= 0.5;
+    
+    return Math.max(0.01, Math.min(0.5, baseCritChance + critChanceMod));
   }
 
   static applyExpBonus(gameState, baseExp) {
     const effects = this.getCombinedEffects(gameState.weatherState);
-    return Math.floor(baseExp * (1 + effects.expBonus));
+    const hasShield = this.hasWeatherShield(gameState.weatherState);
+    
+    let expBonus = effects.expBonus;
+    if (hasShield) expBonus *= 1.2;
+    
+    return Math.floor(baseExp * (1 + expBonus));
   }
 
   static getModifiedViewRange(gameState, baseRange) {
     const effects = this.getCombinedEffects(gameState.weatherState);
-    return Math.max(2, baseRange + effects.viewRangeMod);
+    const hasShield = this.hasWeatherShield(gameState.weatherState);
+    
+    let viewRangeMod = effects.viewRangeMod;
+    if (hasShield && viewRangeMod < 0) viewRangeMod = 0;
+    
+    return Math.max(2, baseRange + viewRangeMod);
   }
 
   static getWeatherMapClasses(weatherState) {

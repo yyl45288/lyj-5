@@ -22,7 +22,10 @@ const EQUIPMENT_DATA = {
     { id: 'ring_2', name: '力量戒指', type: 'accessory', rarity: 'uncommon', stats: { attack: 3 }, icon: '💪' },
     { id: 'amulet_1', name: '守护护符', type: 'accessory', rarity: 'rare', stats: { defense: 5, maxHp: 10 }, icon: '📿' },
     { id: 'amulet_2', name: '吸血项链', type: 'accessory', rarity: 'epic', stats: { attack: 5, maxHp: 25 }, icon: '🩸' },
-    { id: 'crown_1', name: '王者之冠', type: 'accessory', rarity: 'legendary', stats: { attack: 8, defense: 8, maxHp: 40 }, icon: '👑' }
+    { id: 'crown_1', name: '王者之冠', type: 'accessory', rarity: 'legendary', stats: { attack: 8, defense: 8, maxHp: 40 }, icon: '👑' },
+    { id: 'amulet_weather', name: '天候护符', type: 'accessory', rarity: 'rare', stats: { maxHp: 8 }, weatherProtection: true, icon: '🌤️', description: '佩戴后有70%概率抵御异常天气触发。' },
+    { id: 'amulet_weather_pro', name: '星辰护符', type: 'accessory', rarity: 'epic', stats: { maxHp: 15, defense: 2 }, weatherProtection: true, weatherDamageResist: 0.5, icon: '🌟', description: '抵御异常天气，天气伤害减半，敌人因天气获得的增益降低。' },
+    { id: 'cloak_wind', name: '风行斗篷', type: 'accessory', rarity: 'uncommon', stats: {}, weatherProtection: false, ignoreWeatherMoveBlock: true, icon: '🧥', description: '穿着时不会因天气原因导致移动失败。' }
   ]
 };
 
@@ -103,6 +106,32 @@ const WEATHER_SCROLLS = [
     rarity: 'uncommon',
     icon: '🧿',
     description: '使用后清除所有天气效果。'
+  },
+  {
+    id: 'potion_weather_resist',
+    name: '天气抗性药剂',
+    type: 'weather_resist',
+    rarity: 'uncommon',
+    icon: '🧪',
+    duration: 30,
+    description: '使用后30步内免疫天气伤害和移动阻碍，天气负面效果减半。'
+  },
+  {
+    id: 'scroll_weather_shield',
+    name: '天气护盾卷轴',
+    type: 'weather_shield',
+    rarity: 'rare',
+    icon: '📜',
+    duration: 20,
+    description: '使用后20步内完全免疫所有负面天气效果，正面天气效果增强。'
+  },
+  {
+    id: 'item_weather_lure',
+    name: '天候水晶',
+    type: 'weather_lure',
+    rarity: 'epic',
+    icon: '💎',
+    description: '使用后将当前所有负面天气转化为随机正面天气。'
   }
 ];
 

@@ -203,24 +203,31 @@ class CharacterSystem {
     if (!gameState.moveCount) gameState.moveCount = 0;
     gameState.moveCount++;
 
-    const triggerChance = 0.03 + gameState.dungeon.floor * 0.005;
+    const triggerChance = 0.01 + gameState.dungeon.floor * 0.002;
     if (Math.random() > triggerChance) return null;
-    if (gameState.weatherState.activeWeathers.length >= 3) return null;
+    if (gameState.weatherState.activeWeathers.length >= 2) return null;
 
     const floor = gameState.dungeon.floor;
     const isLowHp = gameState.player.stats.currentHp / gameState.player.stats.maxHp < 0.3;
+    const hasWeatherProtection = this.hasWeatherProtection(gameState);
     
-    let positiveBias = 0;
+    if (hasWeatherProtection && Math.random() < 0.7) {
+      gameState.gameLog.push('🛡️ 你的护符抵御了异常天气！');
+      return null;
+    }
+
+    let positiveBias = 0.5;
     let negativeBias = 0;
 
-    if (isLowHp && Math.random() < 0.3) {
+    if (isLowHp && Math.random() < 0.5) {
       positiveBias = 2;
+      negativeBias = -0.5;
     }
 
     const result = WeatherSystem.triggerRandomWeather(gameState.weatherState, floor, {
       positiveBias,
       negativeBias,
-      durationMultiplier: 0.6,
+      durationMultiplier: 0.5,
       allowDuplicate: false
     });
 
@@ -242,6 +249,12 @@ class CharacterSystem {
     }
   }
 
+  static hasWeatherProtection(gameState) {
+    const accessory = gameState.player.equipment.accessory;
+    if (!accessory) return false;
+    return accessory.weatherProtection || false;
+  }
+
   static nextFloor(gameState) {
     const newFloor = gameState.dungeon.floor + 1;
     const newDungeon = generateDungeon(50, 50, newFloor);
@@ -250,7 +263,7 @@ class CharacterSystem {
     gameState.score += 100 * newFloor;
     gameState.gameLog.push(`🚪 你进入了第 ${newFloor} 层！获得 ${100 * newFloor} 积分！`);
 
-    gameState.weatherState = WeatherSystem.generateWeatherForFloor(newFloor);
+    gameState.weatherState = WeatherSystem.generateWeatherForFloor(newFloor, gameState);
     const activeWeathers = WeatherSystem.getActiveWeatherDescriptions(gameState.weatherState);
     if (activeWeathers.length > 0) {
       activeWeathers.forEach(w => {
@@ -393,13 +406,69 @@ class CharacterSystem {
         : `🧿 使用 ${item.name}，但当前没有天气效果。`;
       gameState.gameLog.push(message);
       return { success: true, message, removedCount: removed.length };
+    } else if (item.type === 'weather_resist') {
+      player.inventory.splice(itemIndex, 1);
+      WeatherSystem.addWeatherResist(gameState.weatherState, item.duration);
+      const message = `🧪 使用 ${item.name}，接下来 ${item.duration} 步内免疫天气伤害，负面效果减半！`;
+      gameState.gameLog.push(message);
+      return { success: true, message, duration: item.duration };
+    } else if (item.type === 'weather_shield') {
+      player.inventory.splice(itemIndex, 1);
+      WeatherSystem.addWeatherShield(gameState.weatherState, item.duration);
+      const message = `📜 使用 ${item.name}，接下来 ${item.duration} 步内完全免疫负面天气！`;
+      gameState.gameLog.push(message);
+      return { success: true, message, duration: item.duration };
+    } else if (item.type === 'weather_lure') {
+      player.inventory.splice(itemIndex, 1);
+      let convertedCount = 0;
+      const toRemove = [];
+      
+      gameState.weatherState.activeWeathers.forEach(w => {
+        const data = WEATHER_DATA[w.id];
+        const isNegative = data.effects.moveHpChange < 0 || 
+          data.effects.attackMod < 0 || 
+          data.effects.defenseMod < 0 ||
+          data.effects.moveBlockChance > 0;
+        
+        if (isNegative) {
+          toRemove.push(w.id);
+          convertedCount++;
+        }
+      });
+      
+      toRemove.forEach(id => {
+        WeatherSystem.removeWeather(gameState.weatherState, id);
+      });
+      
+      if (convertedCount > 0) {
+        for (let i = 0; i < convertedCount; i++) {
+          WeatherSystem.triggerRandomWeather(gameState.weatherState, gameState.dungeon.floor, {
+            positiveBias: 3,
+            durationMultiplier: 0.8
+          });
+        }
+        const message = `💎 使用 ${item.name}，将 ${convertedCount} 个负面天气转化为正面天气！`;
+        gameState.gameLog.push(message);
+        return { success: true, message, convertedCount };
+      } else {
+        const message = `💎 使用 ${item.name}，但当前没有负面天气需要转化。`;
+        gameState.gameLog.push(message);
+        return { success: true, message, convertedCount: 0 };
+      }
     }
     
     return null;
   }
 
   static isUsableItem(item) {
-    return item && (item.type === 'potion' || item.type === 'weather_scroll' || item.type === 'weather_clear');
+    return item && (
+      item.type === 'potion' || 
+      item.type === 'weather_scroll' || 
+      item.type === 'weather_clear' ||
+      item.type === 'weather_resist' ||
+      item.type === 'weather_shield' ||
+      item.type === 'weather_lure'
+    );
   }
 
   static getPlayerTotalStats(gameState) {

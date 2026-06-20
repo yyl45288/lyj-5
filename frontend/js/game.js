@@ -318,8 +318,11 @@ class Game {
         const panel = document.getElementById('weather-panel');
         const grid = document.getElementById('weather-grid');
         const activeWeathers = WeatherSystem.getActiveWeatherDescriptions(this.gameState.weatherState);
+        const hasShield = WeatherSystem.hasWeatherShield(this.gameState.weatherState);
+        const hasResist = WeatherSystem.hasWeatherResist(this.gameState.weatherState);
+        const shields = this.gameState.weatherState.shields;
 
-        if (activeWeathers.length === 0) {
+        if (activeWeathers.length === 0 && !hasShield && !hasResist) {
             panel.classList.add('hidden');
             return;
         }
@@ -327,6 +330,18 @@ class Game {
         panel.classList.remove('hidden');
 
         let html = '';
+        
+        if (hasShield || hasResist) {
+            html += `<div style="margin-bottom: 10px; padding: 8px; background: rgba(46, 204, 113, 0.1); border-radius: 6px; border-left: 3px solid #2ECC71;">`;
+            if (hasShield) {
+                html += `<div style="color: #2ECC71; font-weight: bold; margin-bottom: 2px;">🛡️ 天气护盾：剩余 ${shields.weatherShield} 步</div>`;
+            }
+            if (hasResist) {
+                html += `<div style="color: #3498DB; font-weight: bold;">🧪 天气抗性：剩余 ${shields.weatherResist} 步</div>`;
+            }
+            html += `</div>`;
+        }
+
         activeWeathers.forEach(w => {
             const urgentClass = w.isUrgent ? ' urgent' : '';
             const progressColor = w.isUrgent ? '#E74C3C' : w.color;
