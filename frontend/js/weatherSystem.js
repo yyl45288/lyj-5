@@ -248,9 +248,11 @@ class WeatherSystem {
 
       if (selected && !selectedWeathers.includes(selected.id)) {
         selectedWeathers.push(selected.id);
+        const dur = this.generateWeatherDuration(floor);
         weatherState.activeWeathers.push({
           id: selected.id,
-          duration: this.generateWeatherDuration(floor),
+          duration: dur,
+          maxDuration: dur,
           startedAt: Date.now()
         });
         weatherState.weatherTimers[selected.id] = weatherState.activeWeathers[weatherState.activeWeathers.length - 1];
@@ -272,14 +274,20 @@ class WeatherSystem {
 
     const existing = weatherState.activeWeathers.find(w => w.id === weatherId);
     if (existing) {
-      existing.duration += duration || 20;
+      const addDuration = duration || 20;
+      existing.duration += addDuration;
+      existing.maxDuration = existing.maxDuration
+        ? Math.max(existing.maxDuration, existing.duration)
+        : existing.duration;
       existing.startedAt = Date.now();
       return { added: false, stacked: true, weather: existing };
     }
 
+    const dur = duration || this.generateWeatherDuration(1);
     const newWeather = {
       id: weatherId,
-      duration: duration || this.generateWeatherDuration(1),
+      duration: dur,
+      maxDuration: dur,
       startedAt: Date.now()
     };
     weatherState.activeWeathers.push(newWeather);
@@ -365,13 +373,19 @@ class WeatherSystem {
     }
     return weatherState.activeWeathers.map(w => {
       const data = WEATHER_DATA[w.id];
+      const maxDur = w.maxDuration || w.duration;
+      const percent = Math.max(0, Math.min(100, (w.duration / maxDur) * 100));
+      const isUrgent = percent <= 25;
       return {
         id: w.id,
         name: data.name,
         icon: data.icon,
         description: data.description,
         color: data.color,
-        duration: w.duration
+        duration: w.duration,
+        maxDuration: maxDur,
+        percent: percent,
+        isUrgent: isUrgent
       };
     });
   }
@@ -450,5 +464,85 @@ class WeatherSystem {
   static getWeatherMapClasses(weatherState) {
     const effects = this.getCombinedEffects(weatherState);
     return effects.mapClasses || [];
+  }
+
+  static triggerRandomWeather(weatherState, floor = 1, options = {}) {
+    const {
+      positiveBias = 0,
+      negativeBias = 0,
+      durationMultiplier = 1,
+      allowDuplicate = false
+    } = options;
+
+    const availableWeathers = Object.values(WEATHER_DATA).filter(w => w.rarity > 0);
+    if (availableWeathers.length === 0) return null;
+
+    const weightedWeathers = availableWeathers.map(w => {
+      let weight = w.rarity;
+      const isPositive = w.effects.moveHpChange > 0 || w.effects.attackMod > 0 || w.effects.defenseMod > 0 || w.effects.expBonus > 0;
+      
+      if (isPositive) {
+        weight *= (1 + positiveBias);
+      } else {
+        weight *= (1 + negativeBias);
+      }
+      
+      if (!allowDuplicate && weatherState.activeWeathers.some(aw => aw.id === w.id)) {
+        weight *= 0.2;
+      }
+      
+      return { weather: w, weight };
+    });
+
+    const totalWeight = weightedWeathers.reduce((sum, w) => sum + w.weight, 0);
+    let roll = Math.random() * totalWeight;
+    let selected = null;
+
+    for (const w of weightedWeathers) {
+      roll -= w.weight;
+      if (roll <= 0) {
+        selected = w.weather;
+        break;
+      }
+    }
+
+    if (!selected) return null;
+
+    const duration = Math.floor(this.generateWeatherDuration(floor) * durationMultiplier);
+    const result = this.addWeather(weatherState, selected.id, duration);
+    return result ? { ...result, weatherData: selected } : null;
+  }
+
+  static triggerWeatherById(weatherState, weatherId, duration = null) {
+    if (!WEATHER_DATA[weatherId]) return null;
+    const result = this.addWeather(weatherState, weatherId, duration);
+    return result ? { ...result, weatherData: WEATHER_DATA[weatherId] } : null;
+  }
+
+  static getRandomWeatherByType(floor = 1, type = 'any') {
+    const availableWeathers = Object.values(WEATHER_DATA).filter(w => w.rarity > 0);
+    let filtered = availableWeathers;
+
+    if (type === 'positive') {
+      filtered = availableWeathers.filter(w => 
+        w.effects.moveHpChange > 0 || w.effects.attackMod > 0 || w.effects.defenseMod > 0 || w.effects.expBonus > 0
+      );
+    } else if (type === 'negative') {
+      filtered = availableWeathers.filter(w => 
+        w.effects.moveHpChange < 0 || w.effects.attackMod < 0 || w.effects.defenseMod < 0 || w.effects.moveBlockChance > 0
+      );
+    }
+
+    if (filtered.length === 0) return availableWeathers[Math.floor(Math.random() * availableWeathers.length)];
+
+    const totalRarity = filtered.reduce((sum, w) => sum + w.rarity, 0);
+    let roll = Math.random() * totalRarity;
+    
+    for (const weather of filtered) {
+      roll -= weather.rarity;
+      if (roll <= 0) return weather;
+    }
+
+    return filtered[0];
   }
 }

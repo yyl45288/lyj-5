@@ -175,17 +175,44 @@ class Game {
         const statsContainer = document.getElementById('modal-item-stats');
         statsContainer.innerHTML = '';
         
-        if (item.stats.attack) {
+        if (item.stats && item.stats.attack) {
             statsContainer.innerHTML += `<div class="modal-stat"><span>⚔️ 攻击力</span><span>+${item.stats.attack}</span></div>`;
         }
-        if (item.stats.defense) {
+        if (item.stats && item.stats.defense) {
             statsContainer.innerHTML += `<div class="modal-stat"><span>🛡️ 防御力</span><span>+${item.stats.defense}</span></div>`;
         }
-        if (item.stats.maxHp) {
+        if (item.stats && item.stats.maxHp) {
             statsContainer.innerHTML += `<div class="modal-stat"><span>❤️ 生命值</span><span>+${item.stats.maxHp}</span></div>`;
         }
 
+        if (item.description) {
+            statsContainer.innerHTML += `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary); font-size: 0.9rem;">${item.description}</div>`;
+        }
+
+        const equipBtn = document.getElementById('equip-btn');
+        const useBtn = document.getElementById('use-btn');
+        
+        if (CharacterSystem.isUsableItem(item)) {
+            equipBtn.classList.add('hidden');
+            useBtn.classList.remove('hidden');
+        } else {
+            equipBtn.classList.remove('hidden');
+            useBtn.classList.add('hidden');
+        }
+
         document.getElementById('item-modal').classList.remove('hidden');
+    }
+
+    useSelectedItem() {
+        if (!this.selectedItem) return;
+        
+        const result = CharacterSystem.useWeatherScroll(this.gameState, this.selectedItem.id);
+        if (result && result.success) {
+            this.showNotification(result.message);
+        }
+        
+        this.closeItemModal();
+        this.render();
     }
 
     closeItemModal() {
@@ -301,12 +328,17 @@ class Game {
 
         let html = '';
         activeWeathers.forEach(w => {
+            const urgentClass = w.isUrgent ? ' urgent' : '';
+            const progressColor = w.isUrgent ? '#E74C3C' : w.color;
             html += `
-                <div class="weather-item" title="${w.description}" style="border-left-color: ${w.color}">
+                <div class="weather-item${urgentClass}" title="${w.description}" style="border-left-color: ${w.color}">
                     <div class="weather-icon">${w.icon}</div>
                     <div class="weather-info">
                         <div class="weather-name">${w.name}</div>
-                        <div class="weather-duration">剩余 ${w.duration} 步</div>
+                        <div class="weather-duration">剩余 ${w.duration} 步 / ${w.maxDuration} 步</div>
+                        <div class="weather-progress">
+                            <div class="weather-progress-bar" style="width: ${w.percent}%; background: ${progressColor}"></div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -579,6 +611,12 @@ class Game {
         document.getElementById('equip-btn').addEventListener('click', () => {
             if (this.selectedItem) {
                 this.equipItem(this.selectedItem.id);
+            }
+        });
+
+        document.getElementById('use-btn').addEventListener('click', () => {
+            if (this.selectedItem) {
+                this.useSelectedItem();
             }
         });
 

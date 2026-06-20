@@ -158,6 +158,11 @@ class CharacterSystem {
     const expiredWeathers2 = WeatherSystem.tickWeatherDuration(gameState.weatherState, 0);
     this.handleExpiredWeathers(gameState, expiredWeathers2);
 
+    const randomWeatherResult = this.tryRandomWeatherEvent(gameState);
+    if (randomWeatherResult) {
+      gameState.gameLog.push(randomWeatherResult.message);
+    }
+
     if (player.stats.currentHp <= 0) {
       return { type: 'death' };
     }
@@ -192,6 +197,49 @@ class CharacterSystem {
         gameState.gameLog.push(`${data.icon} 天气【${data.name}】已消散。`);
       }
     });
+  }
+
+  static tryRandomWeatherEvent(gameState) {
+    if (!gameState.moveCount) gameState.moveCount = 0;
+    gameState.moveCount++;
+
+    const triggerChance = 0.03 + gameState.dungeon.floor * 0.005;
+    if (Math.random() > triggerChance) return null;
+    if (gameState.weatherState.activeWeathers.length >= 3) return null;
+
+    const floor = gameState.dungeon.floor;
+    const isLowHp = gameState.player.stats.currentHp / gameState.player.stats.maxHp < 0.3;
+    
+    let positiveBias = 0;
+    let negativeBias = 0;
+
+    if (isLowHp && Math.random() < 0.3) {
+      positiveBias = 2;
+    }
+
+    const result = WeatherSystem.triggerRandomWeather(gameState.weatherState, floor, {
+      positiveBias,
+      negativeBias,
+      durationMultiplier: 0.6,
+      allowDuplicate: false
+    });
+
+    if (!result) return null;
+
+    const data = result.weatherData;
+    if (result.stacked) {
+      return {
+        success: true,
+        message: `${data.icon} 天气【${data.name}】加剧了！持续时间延长。`,
+        weather: data
+      };
+    } else {
+      return {
+        success: true,
+        message: `🌟 突发天气！${data.icon}【${data.name}】来袭：${data.description}`,
+        weather: data
+      };
+    }
   }
 
   static nextFloor(gameState) {
@@ -311,6 +359,47 @@ class CharacterSystem {
 
     gameState.gameLog.push(`🧪 你使用了 ${potion.icon} ${potion.name}，恢复了 ${healAmount} 点生命值！`);
     return { healed: healAmount, usedPotion: true, potion };
+  }
+
+  static useWeatherScroll(gameState, itemId) {
+    const player = gameState.player;
+    const itemIndex = player.inventory.findIndex(item => item.id === itemId);
+    
+    if (itemIndex === -1) return null;
+    
+    const item = player.inventory[itemIndex];
+    
+    if (item.type === 'weather_scroll') {
+      player.inventory.splice(itemIndex, 1);
+      const result = WeatherSystem.triggerWeatherById(
+        gameState.weatherState,
+        item.weatherId,
+        item.duration
+      );
+      
+      if (result) {
+        const data = result.weatherData;
+        const message = result.stacked
+          ? `📜 使用 ${item.name}，${data.icon}【${data.name}】天气加剧！`
+          : `📜 使用 ${item.name}，召唤出 ${data.icon}【${data.name}】天气！`;
+        gameState.gameLog.push(message);
+        return { success: true, message, weather: data };
+      }
+    } else if (item.type === 'weather_clear') {
+      player.inventory.splice(itemIndex, 1);
+      const removed = WeatherSystem.clearAllWeathers(gameState.weatherState);
+      const message = removed.length > 0
+        ? `🧿 使用 ${item.name}，清除了 ${removed.length} 个天气效果！`
+        : `🧿 使用 ${item.name}，但当前没有天气效果。`;
+      gameState.gameLog.push(message);
+      return { success: true, message, removedCount: removed.length };
+    }
+    
+    return null;
+  }
+
+  static isUsableItem(item) {
+    return item && (item.type === 'potion' || item.type === 'weather_scroll' || item.type === 'weather_clear');
   }
 
   static getPlayerTotalStats(gameState) {

@@ -144,6 +144,12 @@ class CombatSystem {
       this.addCombatLog(`✨ 获得 ${expGain} 经验值，${scoreGain} 积分！`);
     }
 
+    const weatherTriggerResult = this.tryWeatherOnKill(enemy);
+    if (weatherTriggerResult) {
+      this.addCombatLog(weatherTriggerResult.message);
+      this.gameState.gameLog.push(weatherTriggerResult.message);
+    }
+
     let droppedItem = null;
     if (Math.random() < enemy.dropRate) {
       droppedItem = getRandomEquipment(this.gameState.dungeon.floor);
@@ -159,8 +165,64 @@ class CombatSystem {
       expGain,
       scoreGain,
       droppedItem,
-      levelUp: levelResult
+      levelUp: levelResult,
+      weatherTriggered: weatherTriggerResult
     };
+  }
+
+  tryWeatherOnKill(enemy) {
+    const floor = this.gameState.dungeon.floor;
+    const isElite = enemy.expReward >= 80 * (1 + (floor - 1) * 0.15);
+    const isBoss = enemy.expReward >= 150 * (1 + (floor - 1) * 0.15);
+    
+    let triggerChance = 0.15;
+    let positiveBias = 0;
+    let durationMultiplier = 0.5;
+
+    if (isElite) {
+      triggerChance = 0.4;
+      positiveBias = 0.5;
+      durationMultiplier = 0.7;
+    }
+    
+    if (isBoss) {
+      triggerChance = 0.7;
+      positiveBias = 1;
+      durationMultiplier = 1;
+    }
+
+    if (this.gameState.weatherState.activeWeathers.length >= 3) {
+      triggerChance *= 0.3;
+    }
+
+    if (Math.random() > triggerChance) return null;
+
+    const result = WeatherSystem.triggerRandomWeather(
+      this.gameState.weatherState,
+      floor,
+      {
+        positiveBias,
+        durationMultiplier,
+        allowDuplicate: isBoss
+      }
+    );
+
+    if (!result) return null;
+
+    const data = result.weatherData;
+    if (result.stacked) {
+      return {
+        success: true,
+        message: `🔮 击杀引发气场波动！${data.icon}【${data.name}】天气加剧！`,
+        weather: data
+      };
+    } else {
+      return {
+        success: true,
+        message: `🔮 击杀引发气场变化！${data.icon}【${data.name}】天气降临：${data.description}`,
+        weather: data
+      };
+    }
   }
 
   playerDefeated() {

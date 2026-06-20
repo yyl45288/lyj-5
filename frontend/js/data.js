@@ -55,6 +55,57 @@ const RARITY_NAMES = {
   legendary: '传说'
 };
 
+const WEATHER_SCROLLS = [
+  {
+    id: 'scroll_acid_rain',
+    name: '酸雨卷轴',
+    type: 'weather_scroll',
+    rarity: 'uncommon',
+    icon: '📜',
+    weatherId: 'acid_rain',
+    duration: 25,
+    description: '使用后召唤酸雨天气，持续25步。'
+  },
+  {
+    id: 'scroll_divine_light',
+    name: '圣光卷轴',
+    type: 'weather_scroll',
+    rarity: 'rare',
+    icon: '📜',
+    weatherId: 'divine_light',
+    duration: 20,
+    description: '使用后召唤神圣光辉，持续20步。'
+  },
+  {
+    id: 'scroll_thunderstorm',
+    name: '雷暴卷轴',
+    type: 'weather_scroll',
+    rarity: 'rare',
+    icon: '📜',
+    weatherId: 'thunderstorm',
+    duration: 20,
+    description: '使用后召唤雷电风暴，持续20步。'
+  },
+  {
+    id: 'scroll_magma_heat',
+    name: '熔岩卷轴',
+    type: 'weather_scroll',
+    rarity: 'epic',
+    icon: '📜',
+    weatherId: 'magma_heat',
+    duration: 15,
+    description: '使用后召唤熔岩热浪，持续15步。'
+  },
+  {
+    id: 'scroll_clear_weather',
+    name: '晴空咒符',
+    type: 'weather_clear',
+    rarity: 'uncommon',
+    icon: '🧿',
+    description: '使用后清除所有天气效果。'
+  }
+];
+
 function getAllEquipment() {
   return [
     ...EQUIPMENT_DATA.weapons,
@@ -64,6 +115,11 @@ function getAllEquipment() {
 }
 
 function getRandomEquipment(floor = 1) {
+  const scrollChance = 0.15 + floor * 0.01;
+  if (Math.random() < scrollChance) {
+    return getRandomWeatherScroll(floor);
+  }
+
   const allEquipment = getAllEquipment();
   const rarityWeights = {
     common: Math.max(50 - floor * 3, 10),
@@ -94,6 +150,37 @@ function getRandomEquipment(floor = 1) {
   return {
     ...baseEquipment,
     id: `${baseEquipment.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  };
+}
+
+function getRandomWeatherScroll(floor = 1) {
+  const rarityWeights = {
+    uncommon: 50,
+    rare: 30 + floor,
+    epic: 10 + floor * 0.5
+  };
+
+  const totalWeight = Object.values(rarityWeights).reduce((a, b) => a + b, 0);
+  let random = Math.random() * totalWeight;
+  let selectedRarity = 'uncommon';
+
+  for (const [rarity, weight] of Object.entries(rarityWeights)) {
+    random -= weight;
+    if (random <= 0) {
+      selectedRarity = rarity;
+      break;
+    }
+  }
+
+  const scrollsOfRarity = WEATHER_SCROLLS.filter(s => s.rarity === selectedRarity);
+  if (scrollsOfRarity.length === 0) {
+    return WEATHER_SCROLLS[Math.floor(Math.random() * WEATHER_SCROLLS.length)];
+  }
+
+  const baseScroll = scrollsOfRarity[Math.floor(Math.random() * scrollsOfRarity.length)];
+  return {
+    ...baseScroll,
+    id: `${baseScroll.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   };
 }
 
