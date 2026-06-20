@@ -137,6 +137,20 @@ class CombatSystem {
     this.gameState.score += scoreGain;
     this.gameState.kills++;
 
+    if (!this.gameState.comboKills) this.gameState.comboKills = 0;
+    this.gameState.comboKills++;
+    this.gameState.lastKillTime = Date.now();
+
+    const comboBonus = Math.floor(this.gameState.comboKills / 3);
+    const enemyRarity = enemy.rarity || 'common';
+    let goldDrop = CharacterSystem.getGoldDropFromEnemy(enemy, this.gameState.dungeon.floor);
+    if (comboBonus > 0) {
+      const comboGold = Math.floor(goldDrop * comboBonus * 0.2);
+      goldDrop += comboGold;
+    }
+    const totalGoldCollected = (this.gameState.totalGoldCollected || 0) + goldDrop;
+    this.gameState.totalGoldCollected = totalGoldCollected;
+
     this.addCombatLog(`🎉 你击败了 ${enemy.name}！`);
     if (expBonus > 0) {
       this.addCombatLog(`✨ 获得 ${expGain} 经验值（天气加成 +${expBonus}），${scoreGain} 积分！`);
@@ -144,10 +158,18 @@ class CombatSystem {
       this.addCombatLog(`✨ 获得 ${expGain} 经验值，${scoreGain} 积分！`);
     }
 
-    const goldDrop = CharacterSystem.getGoldDropFromEnemy(enemy);
     if (goldDrop > 0) {
       this.gameState.player.gold += goldDrop;
-      this.addCombatLog(`💰 获得 ${goldDrop} 金币！`);
+      let goldMsg = `💰 获得 ${goldDrop} 金币`;
+      if (comboBonus > 0) goldMsg += `（连击奖励 x${comboBonus + 1}）`;
+      if (enemyRarity !== 'common') goldMsg += `[${enemyRarity}]`;
+      this.addCombatLog(goldMsg + '！');
+    }
+
+    Game.updateQuestProgress(this.gameState, 'kill_enemies', 1);
+    Game.updateQuestProgress(this.gameState, 'collect_gold', goldDrop);
+    if (this.gameState.comboKills >= 2) {
+      Game.updateQuestProgress(this.gameState, 'complete_combo', this.gameState.comboKills);
     }
 
     const weatherTriggerResult = this.tryWeatherOnKill(enemy);

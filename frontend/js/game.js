@@ -74,19 +74,36 @@ class Game {
         }
 
         if (result.type === 'merchant') {
+            this.gameState.merchantsVisited = (this.gameState.merchantsVisited || 0) + 1;
+            Game.updateQuestProgress(this.gameState, 'find_merchant', 1);
             this.openMerchant(result.merchant);
             this.render();
             return;
         }
 
         if (result.type === 'stairs') {
+            Game.updateQuestProgress(this.gameState, 'reach_stairs', 1);
             CharacterSystem.nextFloor(this.gameState);
-            this.showNotification(`🚪 进入第 ${this.gameState.dungeon.floor} 层！`);
+            const floor = this.gameState.dungeon.floor;
+            this.showNotification(`🚪 进入第 ${floor} 层！`);
+            
+            this.gameState.comboKills = 0;
+            this.gameState.quests = generateFloorQuests(floor, 2);
+            this.gameState.gameLog.push(`📜 第 ${floor} 层新任务已发布！`);
+            
+            const merchantCount = this.gameState.dungeon.merchantCount || 0;
+            if (merchantCount > 0) {
+                this.gameState.gameLog.push(`🛒 第 ${floor} 层出现了 ${merchantCount} 位商人！寻找他们进行交易吧！`);
+                setTimeout(() => {
+                    this.showNotification(`🛒 发现 ${merchantCount} 位商人！寻找金色图标交互！`);
+                }, 1200);
+            }
+            
             const activeWeathers = WeatherSystem.getActiveWeatherDescriptions(this.gameState.weatherState);
             if (activeWeathers.length > 0) {
                 setTimeout(() => {
                     this.showNotification(`${activeWeathers.map(w => w.icon + w.name).join(' ')} 天气生效！`);
-                }, 1500);
+                }, 2400);
             }
         }
 
@@ -521,6 +538,8 @@ class Game {
         this.renderWeatherPanel();
         this.renderMap();
         this.renderInventory();
+        this.renderQuests();
+        this.renderCombo();
         this.renderGameLog();
         
         if (this.gameState.combat.active) {
@@ -758,17 +777,64 @@ class Game {
             let className = 'log-entry';
             if (message.includes('⚔️') || message.includes('💥') || message.includes('遭遇')) {
                 className += ' combat';
-            } else if (message.includes('📦') || message.includes('拾取')) {
+            } else if (message.includes('📦') || message.includes('拾取') || message.includes('💰')) {
                 className += ' item';
             } else if (message.includes('🎊') || message.includes('升级')) {
                 className += ' level';
-            } else if (message.includes('🚪') || message.includes('🎮') || message.includes('欢迎')) {
+            } else if (message.includes('🚪') || message.includes('🎮') || message.includes('欢迎') || message.includes('🛒') || message.includes('📜') || message.includes('✅')) {
                 className += ' system';
             }
             return `<div class="${className}">${message}</div>`;
         }).join('');
         
         logElement.scrollTop = logElement.scrollHeight;
+    }
+
+    renderQuests() {
+        const questList = document.getElementById('quest-list');
+        if (!this.gameState.quests || this.gameState.quests.length === 0) {
+            questList.innerHTML = '<div class="quest-empty">暂无任务</div>';
+            return;
+        }
+
+        questList.innerHTML = this.gameState.quests.map(quest => {
+            const percent = Math.min(100, (quest.progress / quest.target) * 100);
+            const statusClass = quest.completed ? 'quest-completed' : '';
+            const icon = quest.completed ? '✅' : '🎯';
+            return `
+                <div class="quest-item ${statusClass}">
+                    <div class="quest-header">
+                        <span class="quest-icon">${icon}</span>
+                        <span class="quest-name">${quest.name}</span>
+                        <span class="quest-reward">💰 ${quest.reward}</span>
+                    </div>
+                    <div class="quest-desc">${quest.description}</div>
+                    <div class="quest-progress-bar">
+                        <div class="quest-progress-fill" style="width: ${percent}%"></div>
+                    </div>
+                    <div class="quest-progress-text">${Math.min(quest.progress, quest.target)} / ${quest.target}</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    renderCombo() {
+        const comboDisplay = document.getElementById('combo-display');
+        const comboKills = this.gameState.comboKills || 0;
+        const now = Date.now();
+        const lastKill = this.gameState.lastKillTime || 0;
+        const comboTimeout = 15000;
+
+        if (comboKills >= 2 && (now - lastKill) < comboTimeout) {
+            comboDisplay.textContent = `🔥 连击 x${comboKills}`;
+            comboDisplay.classList.remove('hidden');
+            comboDisplay.classList.toggle('combo-highlight', comboKills >= 5);
+        } else {
+            if (comboKills >= 2 && (now - lastKill) >= comboTimeout) {
+                this.gameState.comboKills = 0;
+            }
+            comboDisplay.classList.add('hidden');
+        }
     }
 
     renderCombat() {
@@ -940,6 +1006,43 @@ class Game {
         if (!StorageManager.hasLocalSave()) {
             continueBtn.style.opacity = '0.5';
             continueBtn.style.cursor = 'not-allowed';
+        }
+    }
+
+    static updateQuestProgress(gameState, typeId, amount) {
+        if (!gameState.quests) return;
+        let newComplete = false;
+        let completedQuestName = '';
+        let totalReward = 0;
+
+        for (const quest of gameState.quests) {
+            if (quest.completed || quest.typeId !== typeId) continue;
+
+            if (quest.typeId === 'complete_combo') {
+                quest.progress = Math.max(quest.progress, amount);
+            } else if (quest.typeId === 'collect_gold') {
+                quest.progress = (gameState.totalGoldCollected || 0);
+            } else {
+                quest.progress += amount;
+            }
+
+            if (quest.progress >= quest.target) {
+                quest.progress = quest.target;
+                quest.completed = true;
+                newComplete = true;
+                completedQuestName = quest.name;
+                totalReward += quest.reward;
+                gameState.player.gold += quest.reward;
+                if (gameState.gameLog) {
+                    gameState.gameLog.push(`✅ 任务完成【${quest.name}】！获得 ${quest.reward} 金币奖励！`);
+                }
+            }
+        }
+
+        if (newComplete && typeof game !== 'undefined' && game.showNotification) {
+            setTimeout(() => {
+                game.showNotification(`✅ 任务完成！获得 ${totalReward} 金币！`);
+            }, 100);
         }
     }
 }

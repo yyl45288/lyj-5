@@ -30,6 +30,13 @@ class CharacterSystem {
     if (!gameState.player.gold) {
       gameState.player.gold = 50;
     }
+    if (gameState.comboKills === undefined) gameState.comboKills = 0;
+    if (gameState.lastKillTime === undefined) gameState.lastKillTime = 0;
+    if (gameState.totalGoldCollected === undefined) gameState.totalGoldCollected = 0;
+    if (gameState.merchantsVisited === undefined) gameState.merchantsVisited = 0;
+    if (!gameState.quests) {
+      gameState.quests = generateFloorQuests(gameState.dungeon.floor || 1, 2);
+    }
     
     if (gameState.dungeon && gameState.dungeon.tiles) {
       for (let y = 0; y < gameState.dungeon.tiles.length; y++) {
@@ -50,6 +57,7 @@ class CharacterSystem {
     const dungeon = generateDungeon(50, 50, 1);
     player.position = { ...dungeon.playerPosition };
     const weatherState = WeatherSystem.generateWeatherForFloor(1);
+    const floor = 1;
 
     const gameState = {
       player: player,
@@ -63,7 +71,12 @@ class CharacterSystem {
       },
       gameLog: ['🎮 欢迎来到 Roguelike 地牢！'],
       score: 0,
-      kills: 0
+      kills: 0,
+      comboKills: 0,
+      lastKillTime: 0,
+      totalGoldCollected: 0,
+      merchantsVisited: 0,
+      quests: generateFloorQuests(floor, 2)
     };
 
     const activeWeathers = WeatherSystem.getActiveWeatherDescriptions(weatherState);
@@ -72,6 +85,11 @@ class CharacterSystem {
         gameState.gameLog.push(`${w.icon} 本层触发【${w.name}】天气：${w.description}`);
       });
     }
+
+    if (dungeon.merchantCount > 0) {
+      gameState.gameLog.push(`🛒 第 ${floor} 层出现了 ${dungeon.merchantCount} 位商人！寻找他们进行交易吧！`);
+    }
+    gameState.gameLog.push(`📜 新任务已发布，完成任务可获得金币奖励！`);
 
     return gameState;
   }
@@ -657,10 +675,21 @@ class CharacterSystem {
     }
   }
 
-  static getGoldDropFromEnemy(enemy) {
+  static getGoldDropFromEnemy(enemy, floor = 1) {
     if (enemy.goldReward) {
-      return enemy.goldReward;
+      const floorBonus = 1 + (floor - 1) * 0.15;
+      return Math.floor(enemy.goldReward * floorBonus);
     }
-    return getRandomGoldAmount(1);
+    const rarity = enemy.rarity || this.getEnemyRarity(enemy);
+    return getRandomGoldAmount(floor, rarity);
+  }
+
+  static getEnemyRarity(enemy) {
+    const expReward = enemy.expReward || 15;
+    if (expReward >= 150) return 'legendary';
+    if (expReward >= 80) return 'epic';
+    if (expReward >= 50) return 'rare';
+    if (expReward >= 30) return 'uncommon';
+    return 'common';
   }
 }

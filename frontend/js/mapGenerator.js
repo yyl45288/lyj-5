@@ -14,9 +14,12 @@ class DungeonGenerator {
     this.placeStairs();
     this.placeEnemies();
     this.placeItems();
-    this.placeMerchants();
+    const merchantCount = this.placeMerchants() || 0;
     this.placePlayer();
-    return this.createDungeonMap();
+    const map = this.createDungeonMap();
+    map.merchantCount = merchantCount;
+    map.floor = this.floor;
+    return map;
   }
 
   initializeTiles() {
@@ -181,14 +184,21 @@ class DungeonGenerator {
   }
 
   placeMerchants() {
-    const merchantChance = 0.4 + Math.min(this.floor * 0.05, 0.3);
-    if (Math.random() > merchantChance) return;
+    const guaranteedEvery = 2;
+    const isGuaranteedFloor = this.floor % guaranteedEvery === 0;
+    const baseChance = 0.7;
+    const floorBonusChance = Math.min(this.floor * 0.04, 0.3);
+    const finalChance = isGuaranteedFloor ? 1.0 : Math.min(baseChance + floorBonusChance, 0.95);
 
-    const merchantCount = 1 + Math.floor(Math.random() * Math.min(3, Math.floor(this.floor / 3) + 1));
+    if (Math.random() > finalChance && !isGuaranteedFloor) return;
+
+    const minCount = isGuaranteedFloor ? 2 : 1;
+    const maxBonusCount = Math.min(3, Math.floor(this.floor / 3) + 1);
+    const merchantCount = minCount + Math.floor(Math.random() * (maxBonusCount + 1));
     let placed = 0;
     let attempts = 0;
 
-    while (placed < merchantCount && attempts < 100) {
+    while (placed < merchantCount && attempts < 200) {
       attempts++;
       const room = this.rooms[Math.floor(Math.random() * this.rooms.length)];
       if (!room) continue;
@@ -202,6 +212,8 @@ class DungeonGenerator {
         placed++;
       }
     }
+
+    return placed;
   }
 
   placePlayer() {

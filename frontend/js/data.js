@@ -328,8 +328,81 @@ function generateMerchant(floor) {
   };
 }
 
-function getRandomGoldAmount(floor) {
-  const baseAmount = 5 + floor * 3;
-  const variance = Math.floor(Math.random() * baseAmount * 0.5);
-  return Math.floor(baseAmount + variance);
+function getRandomGoldAmount(floor, enemyRarity = 'common') {
+  const baseAmount = 8 + floor * 4;
+  const rarityMultiplier = {
+    common: 1.0,
+    uncommon: 1.5,
+    rare: 2.2,
+    epic: 3.5,
+    legendary: 5.5
+  };
+  const multiplier = rarityMultiplier[enemyRarity] || 1.0;
+  const variance = Math.floor(Math.random() * baseAmount * 0.6);
+  return Math.floor((baseAmount + variance) * multiplier);
+}
+
+const QUEST_TYPES = [
+  {
+    id: 'kill_enemies',
+    name: '清剿怪物',
+    description: (count) => `击败 ${count} 个敌人`,
+    getTarget: (floor) => Math.min(3 + Math.floor(floor * 0.8), 12),
+    getReward: (floor) => 30 + floor * 20
+  },
+  {
+    id: 'find_merchant',
+    name: '寻找商人',
+    description: (count) => `访问 ${count} 个商人`,
+    getTarget: (floor) => Math.min(1 + Math.floor(floor / 5), 3),
+    getReward: (floor) => 25 + floor * 15
+  },
+  {
+    id: 'collect_gold',
+    name: '收集金币',
+    description: (count) => `累计获得 ${count} 金币`,
+    getTarget: (floor) => 50 + floor * 40,
+    getReward: (floor) => 40 + floor * 18
+  },
+  {
+    id: 'complete_combo',
+    name: '连击高手',
+    description: (count) => `达成 ${count} 次连续击杀`,
+    getTarget: (floor) => Math.min(2 + Math.floor(floor * 0.3), 6),
+    getReward: (floor) => 35 + floor * 22
+  },
+  {
+    id: 'reach_stairs',
+    name: '深入探索',
+    description: () => `找到并前往下一层入口`,
+    getTarget: () => 1,
+    getReward: (floor) => 20 + floor * 12
+  }
+];
+
+function generateQuest(floor, existingQuests = []) {
+  const existingIds = existingQuests.map(q => q.typeId);
+  let availableQuests = QUEST_TYPES.filter(q => !existingIds.includes(q.id));
+  if (availableQuests.length === 0) availableQuests = QUEST_TYPES;
+  const questType = availableQuests[Math.floor(Math.random() * availableQuests.length)];
+  const target = questType.getTarget(floor);
+  return {
+    id: 'quest_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    typeId: questType.id,
+    name: questType.name,
+    description: questType.description(target),
+    target,
+    progress: 0,
+    reward: questType.getReward(floor),
+    completed: false,
+    claimed: false
+  };
+}
+
+function generateFloorQuests(floor, count = 2) {
+  const quests = [];
+  for (let i = 0; i < count; i++) {
+    quests.push(generateQuest(floor, quests));
+  }
+  return quests;
 }
