@@ -14,11 +14,15 @@ class CombatSystem {
     return this.gameState.combat;
   }
 
-  calculateDamage(attacker, defender) {
-    const baseDamage = Math.max(1, attacker.attack - defender.defense);
+  calculateDamage(attacker, defender, isPlayerAttacker) {
+    let attackValue = WeatherSystem.applyCombatAttackMods(this.gameState, attacker.attack, isPlayerAttacker);
+    let defenseValue = WeatherSystem.applyCombatDefenseMods(this.gameState, defender.defense, !isPlayerAttacker);
+    const baseDamage = Math.max(1, attackValue - defenseValue);
     const variance = Math.floor(Math.random() * 5) - 2;
-    const critChance = Math.random();
-    const isCrit = critChance < 0.1;
+    const baseCritChance = 0.1;
+    const adjustedCritChance = WeatherSystem.applyCritChanceMod(this.gameState, baseCritChance);
+    const critRoll = Math.random();
+    const isCrit = critRoll < adjustedCritChance;
     const finalDamage = Math.max(1, baseDamage + variance) * (isCrit ? 2 : 1);
     return { damage: finalDamage, isCrit };
   }
@@ -56,7 +60,7 @@ class CombatSystem {
     const attacker = { attack: playerStats.attack };
     const defender = { defense: enemy.defense };
 
-    const { damage, isCrit } = this.calculateDamage(attacker, defender);
+    const { damage, isCrit } = this.calculateDamage(attacker, defender, true);
     enemy.currentHp -= damage;
 
     const critText = isCrit ? '【暴击！】' : '';
@@ -107,7 +111,7 @@ class CombatSystem {
       this.gameState.combat.defending = false;
     }
 
-    const { damage, isCrit } = this.calculateDamage(attacker, defender);
+    const { damage, isCrit } = this.calculateDamage(attacker, defender, false);
     this.gameState.player.stats.currentHp -= damage;
 
     const critText = isCrit ? '【暴击！】' : '';
@@ -124,15 +128,21 @@ class CombatSystem {
 
   enemyDefeated() {
     const enemy = this.gameState.combat.enemy;
-    const expGain = enemy.expReward;
+    const baseExpGain = enemy.expReward;
+    const expGain = WeatherSystem.applyExpBonus(this.gameState, baseExpGain);
     const scoreGain = expGain * 2;
+    const expBonus = expGain - baseExpGain;
 
     this.gameState.player.stats.exp += expGain;
     this.gameState.score += scoreGain;
     this.gameState.kills++;
 
     this.addCombatLog(`🎉 你击败了 ${enemy.name}！`);
-    this.addCombatLog(`✨ 获得 ${expGain} 经验值，${scoreGain} 积分！`);
+    if (expBonus > 0) {
+      this.addCombatLog(`✨ 获得 ${expGain} 经验值（天气加成 +${expBonus}），${scoreGain} 积分！`);
+    } else {
+      this.addCombatLog(`✨ 获得 ${expGain} 经验值，${scoreGain} 积分！`);
+    }
 
     let droppedItem = null;
     if (Math.random() < enemy.dropRate) {

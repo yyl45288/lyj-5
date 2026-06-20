@@ -59,6 +59,11 @@ class Game {
         const result = CharacterSystem.movePlayer(this.gameState, direction);
         if (!result) return;
 
+        if (result.type === 'death') {
+            this.gameOver();
+            return;
+        }
+
         if (result.type === 'encounter') {
             this.combatSystem.startCombat(result.enemy);
             this.removeEnemyFromMap(result.position);
@@ -69,6 +74,12 @@ class Game {
         if (result.type === 'stairs') {
             CharacterSystem.nextFloor(this.gameState);
             this.showNotification(`🚪 进入第 ${this.gameState.dungeon.floor} 层！`);
+            const activeWeathers = WeatherSystem.getActiveWeatherDescriptions(this.gameState.weatherState);
+            if (activeWeathers.length > 0) {
+                setTimeout(() => {
+                    this.showNotification(`${activeWeathers.map(w => w.icon + w.name).join(' ')} 天气生效！`);
+                }, 1500);
+            }
         }
 
         this.render();
@@ -231,6 +242,7 @@ class Game {
         if (!this.gameState) return;
 
         this.renderPlayerStats();
+        this.renderWeatherPanel();
         this.renderMap();
         this.renderInventory();
         this.renderGameLog();
@@ -245,6 +257,7 @@ class Game {
     renderPlayerStats() {
         const player = this.gameState.player;
         const totalStats = CharacterSystem.getPlayerTotalStats(this.gameState);
+        const weatherEffects = WeatherSystem.getCombinedEffects(this.gameState.weatherState);
 
         document.getElementById('player-level').textContent = player.stats.level;
         document.getElementById('player-score').textContent = this.gameState.score.toLocaleString();
@@ -259,10 +272,46 @@ class Game {
         document.getElementById('exp-text').textContent = `${player.stats.exp}/${player.stats.expToNext}`;
         document.getElementById('exp-fill').style.width = `${expPercent}%`;
 
-        document.getElementById('player-attack').textContent = totalStats.attack;
-        document.getElementById('player-defense').textContent = totalStats.defense;
+        const displayAttack = totalStats.attack + weatherEffects.attackMod;
+        const displayDefense = totalStats.defense + weatherEffects.defenseMod;
+        const attackText = weatherEffects.attackMod !== 0
+            ? `${displayAttack} <span style="color:${weatherEffects.attackMod > 0 ? '#2ECC71' : '#E74C3C'}">(${weatherEffects.attackMod > 0 ? '+' : ''}${weatherEffects.attackMod})</span>`
+            : totalStats.attack;
+        const defenseText = weatherEffects.defenseMod !== 0
+            ? `${displayDefense} <span style="color:${weatherEffects.defenseMod > 0 ? '#2ECC71' : '#E74C3C'}">(${weatherEffects.defenseMod > 0 ? '+' : ''}${weatherEffects.defenseMod})</span>`
+            : totalStats.defense;
+
+        document.getElementById('player-attack').innerHTML = attackText;
+        document.getElementById('player-defense').innerHTML = defenseText;
 
         this.renderEquipment();
+    }
+
+    renderWeatherPanel() {
+        const panel = document.getElementById('weather-panel');
+        const grid = document.getElementById('weather-grid');
+        const activeWeathers = WeatherSystem.getActiveWeatherDescriptions(this.gameState.weatherState);
+
+        if (activeWeathers.length === 0) {
+            panel.classList.add('hidden');
+            return;
+        }
+
+        panel.classList.remove('hidden');
+
+        let html = '';
+        activeWeathers.forEach(w => {
+            html += `
+                <div class="weather-item" title="${w.description}" style="border-left-color: ${w.color}">
+                    <div class="weather-icon">${w.icon}</div>
+                    <div class="weather-info">
+                        <div class="weather-name">${w.name}</div>
+                        <div class="weather-duration">剩余 ${w.duration} 步</div>
+                    </div>
+                </div>
+            `;
+        });
+        grid.innerHTML = html;
     }
 
     renderEquipment() {
@@ -292,6 +341,16 @@ class Game {
         const dungeon = this.gameState.dungeon;
         const player = this.gameState.player;
         const mapElement = document.getElementById('game-map');
+        const mapContainer = document.getElementById('map-container');
+        const weatherClasses = WeatherSystem.getWeatherMapClasses(this.gameState.weatherState);
+
+        mapContainer.className = 'map-container';
+        if (weatherClasses.length > 0) {
+            weatherClasses.forEach(cls => mapContainer.classList.add(cls));
+        }
+
+        const baseViewRange = 5;
+        const viewRange = WeatherSystem.getModifiedViewRange(this.gameState, baseViewRange);
         
         let html = '';
         const viewRadius = 15;
@@ -306,7 +365,7 @@ class Game {
                 const tile = dungeon.tiles[y][x];
                 const isPlayer = x === player.position.x && y === player.position.y;
                 const distance = Math.sqrt(Math.pow(x - player.position.x, 2) + Math.pow(y - player.position.y, 2));
-                const isVisible = distance <= 5;
+                const isVisible = distance <= viewRange;
 
                 let cellClass = 'map-cell';
                 let cellContent = '';
@@ -317,6 +376,7 @@ class Game {
                 } else {
                     cellClass += ` ${tile.type}`;
                     if (tile.explored) cellClass += ' explored';
+                    if (!isVisible && tile.explored) cellClass += ' dimmed';
                     
                     if (isPlayer) {
                         cellClass += ' player';
@@ -331,9 +391,11 @@ class Game {
                                 break;
                             case 'enemy':
                                 cellContent = tile.enemy ? tile.enemy.icon : '?';
+                                if (!isVisible) cellContent = '·';
                                 break;
                             case 'item':
                                 cellContent = tile.item ? tile.item.icon : '?';
+                                if (!isVisible) cellContent = '·';
                                 break;
                             case 'stairs':
                                 cellContent = '🚪';

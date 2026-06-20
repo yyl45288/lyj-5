@@ -29,10 +29,12 @@ class CharacterSystem {
     const player = this.createNewPlayer();
     const dungeon = generateDungeon(50, 50, 1);
     player.position = { ...dungeon.playerPosition };
+    const weatherState = WeatherSystem.generateWeatherForFloor(1);
 
-    return {
+    const gameState = {
       player: player,
       dungeon: dungeon,
+      weatherState: weatherState,
       combat: {
         active: false,
         enemy: null,
@@ -43,11 +45,32 @@ class CharacterSystem {
       score: 0,
       kills: 0
     };
+
+    const activeWeathers = WeatherSystem.getActiveWeatherDescriptions(weatherState);
+    if (activeWeathers.length > 0) {
+      activeWeathers.forEach(w => {
+        gameState.gameLog.push(`${w.icon} 本层触发【${w.name}】天气：${w.description}`);
+      });
+    }
+
+    return gameState;
   }
 
   static movePlayer(gameState, direction) {
     const player = gameState.player;
     const dungeon = gameState.dungeon;
+
+    const weatherMoveResult = WeatherSystem.applyMoveEffects(gameState);
+    if (weatherMoveResult.messages) {
+      weatherMoveResult.messages.forEach(msg => gameState.gameLog.push(msg));
+    }
+    if (weatherMoveResult.blocked) {
+      WeatherSystem.tickWeatherDuration(gameState.weatherState, 1);
+      if (player.stats.currentHp <= 0) {
+        return { type: 'death' };
+      }
+      return { type: 'blocked', reason: 'weather' };
+    }
 
     let newX = player.position.x;
     let newY = player.position.y;
@@ -87,10 +110,16 @@ class CharacterSystem {
       return { type: 'blocked', reason: 'wall' };
     }
 
-    this.exploreArea(dungeon, newX, newY);
+    this.exploreArea(dungeon, newX, newY, gameState);
 
     if (tile.type === 'enemy' && tile.enemy) {
       player.position = { x: newX, y: newY };
+      WeatherSystem.tickWeatherDuration(gameState.weatherState, 1);
+      const expiredWeathers = WeatherSystem.tickWeatherDuration(gameState.weatherState, 0);
+      this.handleExpiredWeathers(gameState, expiredWeathers);
+      if (player.stats.currentHp <= 0) {
+        return { type: 'death' };
+      }
       return { type: 'encounter', enemy: tile.enemy, position: { x: newX, y: newY } };
     }
 
@@ -102,22 +131,45 @@ class CharacterSystem {
       tile.item = null;
       gameState.gameLog.push(`📦 你拾取了 ${item.icon} ${item.name}！`);
       gameState.score += 10;
+      WeatherSystem.tickWeatherDuration(gameState.weatherState, 1);
+      const expiredWeathers = WeatherSystem.tickWeatherDuration(gameState.weatherState, 0);
+      this.handleExpiredWeathers(gameState, expiredWeathers);
+      if (player.stats.currentHp <= 0) {
+        return { type: 'death' };
+      }
       return { type: 'item', item: item };
     }
 
     if (tile.type === 'stairs') {
       player.position = { x: newX, y: newY };
+      WeatherSystem.tickWeatherDuration(gameState.weatherState, 1);
+      const expiredWeathers = WeatherSystem.tickWeatherDuration(gameState.weatherState, 0);
+      this.handleExpiredWeathers(gameState, expiredWeathers);
+      if (player.stats.currentHp <= 0) {
+        return { type: 'death' };
+      }
       return { type: 'stairs' };
     }
 
     player.position = { x: newX, y: newY };
     dungeon.playerPosition = { x: newX, y: newY };
 
-    return { type: 'move', position: { x: newX, y: newY } };
+    WeatherSystem.tickWeatherDuration(gameState.weatherState, 1);
+    const expiredWeathers2 = WeatherSystem.tickWeatherDuration(gameState.weatherState, 0);
+    this.handleExpiredWeathers(gameState, expiredWeathers2);
+
+    if (player.stats.currentHp <= 0) {
+      return { type: 'death' };
+    }
+
+    return { type: 'move', position: { x: newX, y: newY }, weatherEffects: weatherMoveResult };
   }
 
-  static exploreArea(dungeon, x, y) {
-    const viewRange = 5;
+  static exploreArea(dungeon, x, y, gameState = null) {
+    let viewRange = 5;
+    if (gameState) {
+      viewRange = WeatherSystem.getModifiedViewRange(gameState, viewRange);
+    }
     for (let dy = -viewRange; dy <= viewRange; dy++) {
       for (let dx = -viewRange; dx <= viewRange; dx++) {
         const nx = x + dx;
@@ -132,6 +184,16 @@ class CharacterSystem {
     }
   }
 
+  static handleExpiredWeathers(gameState, expiredIds) {
+    if (!expiredIds || expiredIds.length === 0) return;
+    expiredIds.forEach(id => {
+      const data = WEATHER_DATA[id];
+      if (data) {
+        gameState.gameLog.push(`${data.icon} 天气【${data.name}】已消散。`);
+      }
+    });
+  }
+
   static nextFloor(gameState) {
     const newFloor = gameState.dungeon.floor + 1;
     const newDungeon = generateDungeon(50, 50, newFloor);
@@ -139,6 +201,19 @@ class CharacterSystem {
     gameState.player.position = { ...newDungeon.playerPosition };
     gameState.score += 100 * newFloor;
     gameState.gameLog.push(`🚪 你进入了第 ${newFloor} 层！获得 ${100 * newFloor} 积分！`);
+
+    gameState.weatherState = WeatherSystem.generateWeatherForFloor(newFloor);
+    const activeWeathers = WeatherSystem.getActiveWeatherDescriptions(gameState.weatherState);
+    if (activeWeathers.length > 0) {
+      activeWeathers.forEach(w => {
+        gameState.gameLog.push(`${w.icon} 本层触发【${w.name}】天气：${w.description}`);
+      });
+    } else {
+      gameState.gameLog.push(`☀️ 本层天气晴朗。`);
+    }
+
+    this.exploreArea(newDungeon, gameState.player.position.x, gameState.player.position.y, gameState);
+
     return newDungeon;
   }
 

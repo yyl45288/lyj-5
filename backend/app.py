@@ -196,6 +196,6 @@ if __name__ == '__main__':
     print('📂 静态文件目录:', os.path.abspath('../frontend'))
     print('💾 存档目录:', SAVES_DIR)
     print('🏆 积分文件:', SCORES_FILE)
-    print('🌐 访问地址: http://localhost:5000')
+    print('🌐 访问地址: http://localhost:8088')
     print('-' * 50)
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8088, debug=True)
