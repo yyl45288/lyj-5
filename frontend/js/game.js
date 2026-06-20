@@ -229,13 +229,13 @@ class Game {
         }
 
         let html = '<div class="merchant-items-grid">';
-        merchant.inventory.forEach(item => {
+        merchant.inventory.forEach((item, index) => {
             const canAfford = this.gameState.player.gold >= item.buyPrice;
             const rarityClass = `rarity-${item.rarity}`;
             const disabledClass = canAfford ? '' : 'disabled';
             
             html += `
-                <div class="merchant-item ${rarityClass} ${disabledClass}" data-item-id="${item.id}">
+                <div class="merchant-item ${rarityClass} ${disabledClass}" data-index="${index}" data-action="view-buy">
                     <div class="merchant-item-icon">${item.icon}</div>
                     <div class="merchant-item-name">${item.name}</div>
                     <div class="merchant-item-price">💰 ${item.buyPrice}</div>
@@ -244,18 +244,39 @@ class Game {
                         ${item.stats?.defense ? `<span>🛡️+${item.stats.defense}</span>` : ''}
                         ${item.stats?.maxHp ? `<span>❤️+${item.stats.maxHp}</span>` : ''}
                     </div>
+                    <div class="item-view-hint">点击查看详情</div>
                 </div>
             `;
         });
         html += '</div>';
+        
+        const refreshCost = Math.floor(10 + this.gameState.dungeon.floor * 5);
+        html += `
+            <div class="merchant-footer">
+                <button class="refresh-btn" id="refresh-shop-btn" data-cost="${refreshCost}">
+                    🔄 刷新商品 (💰 ${refreshCost})
+                </button>
+                <div class="refresh-count">已刷新: ${merchant.refreshCount || 0} 次</div>
+            </div>
+        `;
         container.innerHTML = html;
 
-        container.querySelectorAll('.merchant-item:not(.disabled)').forEach(el => {
+        container.querySelectorAll('.merchant-item').forEach(el => {
             el.addEventListener('click', () => {
-                const itemId = el.dataset.itemId;
-                this.buyItem(itemId);
+                const index = parseInt(el.dataset.index);
+                const item = this.currentMerchant.inventory[index];
+                if (item) {
+                    this.showShopItemModal(item, 'buy');
+                }
             });
         });
+
+        const refreshBtn = document.getElementById('refresh-shop-btn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+                this.refreshShop();
+            });
+        }
     }
 
     renderSellTab(container) {
@@ -266,12 +287,12 @@ class Game {
         }
 
         let html = '<div class="merchant-items-grid">';
-        inventory.forEach(item => {
+        inventory.forEach((item, index) => {
             const sellPrice = calculateItemSellPrice(item, this.gameState.dungeon.floor);
             const rarityClass = `rarity-${item.rarity}`;
             
             html += `
-                <div class="merchant-item ${rarityClass}" data-item-id="${item.id}">
+                <div class="merchant-item ${rarityClass}" data-index="${index}" data-action="view-sell">
                     <div class="merchant-item-icon">${item.icon}</div>
                     <div class="merchant-item-name">${item.name}</div>
                     <div class="merchant-item-price" style="color: #2ECC71;">💰 ${sellPrice}</div>
@@ -280,6 +301,7 @@ class Game {
                         ${item.stats?.defense ? `<span>🛡️+${item.stats.defense}</span>` : ''}
                         ${item.stats?.maxHp ? `<span>❤️+${item.stats.maxHp}</span>` : ''}
                     </div>
+                    <div class="item-view-hint">点击查看详情</div>
                 </div>
             `;
         });
@@ -288,10 +310,125 @@ class Game {
 
         container.querySelectorAll('.merchant-item').forEach(el => {
             el.addEventListener('click', () => {
-                const itemId = el.dataset.itemId;
-                this.sellItem(itemId);
+                const index = parseInt(el.dataset.index);
+                const item = this.gameState.player.inventory[index];
+                if (item) {
+                    this.showShopItemModal(item, 'sell');
+                }
             });
         });
+    }
+
+    showShopItemModal(item, action) {
+        this.pendingShopItem = { item, action };
+        const isBuy = action === 'buy';
+        const floor = this.gameState.dungeon.floor;
+        const price = isBuy ? item.buyPrice : calculateItemSellPrice(item, floor);
+
+        document.getElementById('shop-item-name').textContent = item.name;
+        document.getElementById('shop-item-icon').textContent = item.icon;
+        
+        const rarityElement = document.getElementById('shop-item-rarity');
+        const rarityNames = { common: '普通', uncommon: '优秀', rare: '稀有', epic: '史诗', legendary: '传说' };
+        rarityElement.textContent = rarityNames[item.rarity] || '普通';
+        rarityElement.style.background = RARITY_COLORS[item.rarity] || '#95A5A6';
+        rarityElement.style.color = '#fff';
+
+        const priceElement = document.getElementById('shop-item-price');
+        priceElement.textContent = isBuy ? `💰 ${price}` : `💰 +${price}`;
+        priceElement.style.color = isBuy ? '#F1C40F' : '#2ECC71';
+
+        const statsContainer = document.getElementById('shop-item-stats');
+        statsContainer.innerHTML = '';
+        
+        if (item.stats && item.stats.attack) {
+            statsContainer.innerHTML += `<div class="modal-stat"><span>⚔️ 攻击力</span><span>+${item.stats.attack}</span></div>`;
+        }
+        if (item.stats && item.stats.defense) {
+            statsContainer.innerHTML += `<div class="modal-stat"><span>🛡️ 防御力</span><span>+${item.stats.defense}</span></div>`;
+        }
+        if (item.stats && item.stats.maxHp) {
+            statsContainer.innerHTML += `<div class="modal-stat"><span>❤️ 生命值上限</span><span>+${item.stats.maxHp}</span></div>`;
+        }
+
+        const descContainer = document.getElementById('shop-item-desc');
+        descContainer.innerHTML = '';
+        if (item.description) {
+            descContainer.innerHTML = `<div class="shop-item-desc-text">${item.description}</div>`;
+        }
+        descContainer.innerHTML += `<div class="shop-item-desc-text" style="color: #95A5A6; margin-top: 8px; font-size: 0.9rem;">${isBuy ? '点击"确认购买"完成交易' : '点击"确认出售"获得金币'}</div>`;
+
+        const confirmBtn = document.getElementById('shop-confirm-btn');
+        confirmBtn.textContent = isBuy ? '确认购买' : '确认出售';
+        confirmBtn.style.background = isBuy ? '#3498DB' : '#2ECC71';
+
+        const canAfford = !isBuy || this.gameState.player.gold >= price;
+        confirmBtn.disabled = !canAfford;
+        confirmBtn.style.opacity = canAfford ? '1' : '0.5';
+        confirmBtn.style.cursor = canAfford ? 'pointer' : 'not-allowed';
+
+        document.getElementById('shop-item-modal').classList.remove('hidden');
+    }
+
+    closeShopItemModal() {
+        this.pendingShopItem = null;
+        document.getElementById('shop-item-modal').classList.add('hidden');
+    }
+
+    confirmShopAction() {
+        if (!this.pendingShopItem) return;
+        
+        const { item, action } = this.pendingShopItem;
+        
+        if (action === 'buy') {
+            const result = CharacterSystem.buyItem(this.gameState, this.currentMerchant, item.id);
+            if (result.success) {
+                this.showNotification(`✅ ${result.message}`);
+            } else {
+                this.showNotification(`❌ ${result.message}`);
+            }
+        } else {
+            const result = CharacterSystem.sellItem(this.gameState, this.currentMerchant, item.id);
+            if (result.success) {
+                this.showNotification(`✅ ${result.message}`);
+            } else {
+                this.showNotification(`❌ ${result.message}`);
+            }
+        }
+
+        this.closeShopItemModal();
+        this.renderMerchant();
+        this.render();
+    }
+
+    refreshShop() {
+        const merchant = this.currentMerchant;
+        const floor = this.gameState.dungeon.floor;
+        const refreshCost = Math.floor(10 + floor * 5);
+        const player = this.gameState.player;
+
+        if (player.gold < refreshCost) {
+            this.showNotification(`❌ 金币不足！需要 ${refreshCost} 金币刷新商品`);
+            return;
+        }
+
+        if (!merchant.refreshCount) merchant.refreshCount = 0;
+        const maxRefreshes = 3;
+        if (merchant.refreshCount >= maxRefreshes) {
+            this.showNotification(`❌ 本层商人已达到最大刷新次数 (${maxRefreshes}次)`);
+            return;
+        }
+
+        player.gold -= refreshCost;
+        merchant.refreshCount++;
+        merchant.inventory = generateMerchantInventory(floor, merchant);
+        merchant.inventory.forEach(item => {
+            item.buyPrice = calculateItemBuyPrice(item, floor, merchant.discount);
+        });
+
+        this.showNotification(`🔄 商品已刷新！花费 ${refreshCost} 金币`);
+        this.renderMerchant();
+        this.render();
     }
 
     renderUpgradeTab(container) {
@@ -978,6 +1115,20 @@ class Game {
         document.getElementById('merchant-overlay').addEventListener('click', (e) => {
             if (e.target.id === 'merchant-overlay') {
                 this.closeMerchant();
+            }
+        });
+
+        document.getElementById('shop-cancel-btn').addEventListener('click', () => {
+            this.closeShopItemModal();
+        });
+
+        document.getElementById('shop-confirm-btn').addEventListener('click', () => {
+            this.confirmShopAction();
+        });
+
+        document.getElementById('shop-item-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'shop-item-modal') {
+                this.closeShopItemModal();
             }
         });
 

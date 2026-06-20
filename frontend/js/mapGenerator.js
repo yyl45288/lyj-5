@@ -190,11 +190,9 @@ class DungeonGenerator {
     const floorBonusChance = Math.min(this.floor * 0.04, 0.3);
     const finalChance = isGuaranteedFloor ? 1.0 : Math.min(baseChance + floorBonusChance, 0.95);
 
-    if (Math.random() > finalChance && !isGuaranteedFloor) return;
+    if (Math.random() > finalChance && !isGuaranteedFloor) return 0;
 
-    const minCount = isGuaranteedFloor ? 2 : 1;
-    const maxBonusCount = Math.min(3, Math.floor(this.floor / 3) + 1);
-    const merchantCount = minCount + Math.floor(Math.random() * (maxBonusCount + 1));
+    const merchantCount = 1;
     let placed = 0;
     let attempts = 0;
 
