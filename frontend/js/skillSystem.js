@@ -227,10 +227,10 @@ class SkillSystem {
   }
 
   static ensureSkillCompatibility(gameState) {
-    if (!gameState.player.skills) {
+    if (gameState.player.skills === undefined || gameState.player.skills === null) {
       gameState.player.skills = this.createSkillState();
     }
-    if (!gameState.player.skills.skillPoints === undefined) {
+    if (gameState.player.skills.skillPoints === undefined) {
       gameState.player.skills.skillPoints = Math.max(0, (gameState.player.stats.level || 1) - 1);
     }
     if (!gameState.player.skills.learnedSkills) {
@@ -247,10 +247,10 @@ class SkillSystem {
         dotDamage: 0
       };
     }
-    if (!gameState.player.stats.maxMp) {
-      gameState.player.stats.maxMp = 50 + (gameState.player.stats.level - 1) * 10;
+    if (gameState.player.stats.maxMp === undefined) {
+      gameState.player.stats.maxMp = 50 + ((gameState.player.stats.level || 1) - 1) * 10;
     }
-    if (!gameState.player.stats.currentMp) {
+    if (gameState.player.stats.currentMp === undefined) {
       gameState.player.stats.currentMp = gameState.player.stats.maxMp;
     }
     return gameState;
