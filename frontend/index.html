@@ -104,12 +104,26 @@
                     </div>
                     <div class="bar-container">
                         <div class="bar-label">
+                            <span>💙 魔法值</span>
+                            <span id="mp-text">50/50</span>
+                        </div>
+                        <div class="bar mp-bar">
+                            <div class="bar-fill" id="mp-fill"></div>
+                        </div>
+                    </div>
+                    <div class="bar-container">
+                        <div class="bar-label">
                             <span>⭐ 经验值</span>
                             <span id="exp-text">0/100</span>
                         </div>
                         <div class="bar exp-bar">
                             <div class="bar-fill" id="exp-fill"></div>
                         </div>
+                    </div>
+                    <div class="skill-points-container">
+                        <span class="skill-points-label">🌟 技能点: </span>
+                        <span class="skill-points-value" id="skill-points-text">1</span>
+                        <button class="skill-tree-btn" id="open-skill-tree-btn">📚 技能树</button>
                     </div>
                     <div class="attributes">
                         <div class="attr-item">
@@ -180,7 +194,33 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="combat-player-info">
+                            <div class="combat-player-header">🧙 你的状态</div>
+                            <div class="bar-container combat-bar">
+                                <div class="bar-label">
+                                    <span>❤️ HP</span>
+                                    <span id="combat-hp-text">100/100</span>
+                                </div>
+                                <div class="bar hp-bar">
+                                    <div class="bar-fill" id="combat-hp-fill"></div>
+                                </div>
+                            </div>
+                            <div class="bar-container combat-bar">
+                                <div class="bar-label">
+                                    <span>💙 MP</span>
+                                    <span id="combat-mp-text">50/50</span>
+                                </div>
+                                <div class="bar mp-bar">
+                                    <div class="bar-fill" id="combat-mp-fill"></div>
+                                </div>
+                            </div>
+                            <div id="combat-effects-display" class="combat-effects-display"></div>
+                        </div>
                         <div class="combat-log" id="combat-log"></div>
+                        <div class="combat-skills" id="combat-skills">
+                            <div class="combat-skills-title">🎯 已学技能</div>
+                            <div class="combat-skills-grid" id="combat-skills-grid"></div>
+                        </div>
                         <div class="combat-actions" id="combat-actions">
                             <button class="combat-btn attack-btn" data-action="attack">
                                 <span class="btn-icon">⚔️</span>攻击
@@ -332,9 +372,35 @@
 
     <div id="minimap-overlay" class="minimap-maximized-overlay"></div>
 
+    <div id="skill-tree-overlay" class="modal hidden">
+        <div class="modal-content skill-tree-modal">
+            <div class="skill-tree-header">
+                <h3 class="modal-title">📚 技能树</h3>
+                <div class="skill-tree-info">
+                    <span>🌟 可用技能点: <span id="skill-tree-points" class="skill-points-highlight">1</span></span>
+                </div>
+                <button class="close-btn" id="close-skill-tree-btn">✕</button>
+            </div>
+            <div class="skill-tree-tabs" id="skill-tree-tabs">
+                <button class="skill-tree-tab active" data-branch="warrior" id="tab-warrior">
+                    <span class="tab-icon">⚔️</span> 战士
+                </button>
+                <button class="skill-tree-tab" data-branch="mage" id="tab-mage">
+                    <span class="tab-icon">🔮</span> 法师
+                </button>
+                <button class="skill-tree-tab" data-branch="assassin" id="tab-assassin">
+                    <span class="tab-icon">🗡️</span> 刺客
+                </button>
+            </div>
+            <div class="skill-tree-branch-desc" id="skill-tree-branch-desc"></div>
+            <div class="skill-tree-content" id="skill-tree-content"></div>
+        </div>
+    </div>
+
     <div id="notification" class="notification hidden"></div>
 
     <script src="js/data.js"></script>
+    <script src="js/skillSystem.js"></script>
     <script src="js/weatherSystem.js"></script>
     <script src="js/difficultySystem.js"></script>
     <script src="js/mapGenerator.js"></script>

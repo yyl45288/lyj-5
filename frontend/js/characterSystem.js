@@ -5,10 +5,12 @@ class CharacterSystem {
       inventory.push(getRandomEquipment(1));
     }
 
-    return {
+    let player = {
       stats: {
         maxHp: 100,
         currentHp: 100,
+        maxMp: 50,
+        currentMp: 50,
         attack: 10,
         defense: 5,
         level: 1,
@@ -22,8 +24,10 @@ class CharacterSystem {
         armor: null,
         accessory: null
       },
-      inventory: inventory
+      inventory: inventory,
+      skills: SkillSystem.createSkillState()
     };
+    return player;
   }
 
   static ensureGameStateCompatibility(gameState) {
@@ -48,6 +52,8 @@ class CharacterSystem {
         }
       }
     }
+
+    gameState = SkillSystem.ensureSkillCompatibility(gameState);
     
     gameState = DifficultySystem.ensureGameStateCompatibility(gameState);
     
@@ -450,16 +456,19 @@ class CharacterSystem {
     if (potionIndex === -1) {
       const healAmount = Math.floor(playerStats.maxHp * 0.2);
       player.stats.currentHp = Math.min(player.stats.currentHp + healAmount, playerStats.maxHp);
-      gameState.gameLog.push(`💚 你休息了一下，恢复了 ${healAmount} 点生命值！`);
-      return { healed: healAmount, usedPotion: false };
+      const mpRecover = SkillSystem.restRecoverMp(gameState);
+      gameState.gameLog.push(`💚 你休息了一下，恢复了 ${healAmount} 点生命值和 ${mpRecover} 点魔法值！`);
+      return { healed: healAmount, mpRecovered: mpRecover, usedPotion: false };
     }
 
     const potion = player.inventory[potionIndex];
     player.inventory.splice(potionIndex, 1);
     player.stats.currentHp = Math.min(player.stats.currentHp + healAmount, playerStats.maxHp);
+    const mpRecover = Math.floor(player.stats.maxMp * 0.2);
+    SkillSystem.recoverMp(gameState, mpRecover);
 
-    gameState.gameLog.push(`🧪 你使用了 ${potion.icon} ${potion.name}，恢复了 ${healAmount} 点生命值！`);
-    return { healed: healAmount, usedPotion: true, potion };
+    gameState.gameLog.push(`🧪 你使用了 ${potion.icon} ${potion.name}，恢复了 ${healAmount} 点生命值和 ${mpRecover} 点魔法值！`);
+    return { healed: healAmount, mpRecovered: mpRecover, usedPotion: true, potion };
   }
 
   static useWeatherScroll(gameState, itemId) {

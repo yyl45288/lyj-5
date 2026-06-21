@@ -8,23 +8,13 @@ class CombatSystem {
       active: true,
       enemy: { ...enemy },
       playerTurn: true,
-      log: [`遭遇了 ${enemy.name}！`]
+      log: [`遭遇了 ${enemy.name}！`],
+      enemyStunned: false,
+      defending: false
     };
+    SkillSystem.resetCombatEffects(this.gameState);
     this.addCombatLog(`${enemy.icon} ${enemy.name} 出现了！`);
     return this.gameState.combat;
-  }
-
-  calculateDamage(attacker, defender, isPlayerAttacker) {
-    let attackValue = WeatherSystem.applyCombatAttackMods(this.gameState, attacker.attack, isPlayerAttacker);
-    let defenseValue = WeatherSystem.applyCombatDefenseMods(this.gameState, defender.defense, !isPlayerAttacker);
-    const baseDamage = Math.max(1, attackValue - defenseValue);
-    const variance = Math.floor(Math.random() * 5) - 2;
-    const baseCritChance = 0.1;
-    const adjustedCritChance = WeatherSystem.applyCritChanceMod(this.gameState, baseCritChance);
-    const critRoll = Math.random();
-    const isCrit = critRoll < adjustedCritChance;
-    const finalDamage = Math.max(1, baseDamage + variance) * (isCrit ? 2 : 1);
-    return { damage: finalDamage, isCrit };
   }
 
   getPlayerTotalStats() {
@@ -34,22 +24,67 @@ class CombatSystem {
     let maxHp = player.stats.maxHp;
 
     if (player.equipment.weapon) {
-      attack += player.equipment.weapon.stats.attack || 0;
-      defense += player.equipment.weapon.stats.defense || 0;
-      maxHp += player.equipment.weapon.stats.maxHp || 0;
+      attack += player.equipment.weapon.stats?.attack || 0;
+      defense += player.equipment.weapon.stats?.defense || 0;
+      maxHp += player.equipment.weapon.stats?.maxHp || 0;
     }
     if (player.equipment.armor) {
-      attack += player.equipment.armor.stats.attack || 0;
-      defense += player.equipment.armor.stats.defense || 0;
-      maxHp += player.equipment.armor.stats.maxHp || 0;
+      attack += player.equipment.armor.stats?.attack || 0;
+      defense += player.equipment.armor.stats?.defense || 0;
+      maxHp += player.equipment.armor.stats?.maxHp || 0;
     }
     if (player.equipment.accessory) {
-      attack += player.equipment.accessory.stats.attack || 0;
-      defense += player.equipment.accessory.stats.defense || 0;
-      maxHp += player.equipment.accessory.stats.maxHp || 0;
+      attack += player.equipment.accessory.stats?.attack || 0;
+      defense += player.equipment.accessory.stats?.defense || 0;
+      maxHp += player.equipment.accessory.stats?.maxHp || 0;
+    }
+
+    const effects = player.skills?.combatEffects;
+    if (effects) {
+      if (effects.attackMod) {
+        attack = Math.floor(attack * (1 + effects.attackMod));
+      }
+      if (effects.defenseMod) {
+        defense = Math.floor(defense * (1 + effects.defenseMod));
+      }
     }
 
     return { attack, defense, maxHp };
+  }
+
+  calculateDamage(attacker, defender, isPlayerAttacker, overrideMultiplier = 1, forceCrit = false) {
+    let attackValue = WeatherSystem.applyCombatAttackMods(this.gameState, attacker.attack, isPlayerAttacker);
+    let defenseValue = WeatherSystem.applyCombatDefenseMods(this.gameState, defender.defense, !isPlayerAttacker);
+    attackValue = Math.floor(attackValue * overrideMultiplier);
+    const baseDamage = Math.max(1, attackValue - defenseValue);
+    const variance = Math.floor(Math.random() * 5) - 2;
+    const baseCritChance = 0.1;
+    const adjustedCritChance = forceCrit ? 1.0 : WeatherSystem.applyCritChanceMod(this.gameState, baseCritChance);
+    const critRoll = Math.random();
+    const isCrit = critRoll < adjustedCritChance;
+    const finalDamage = Math.max(1, baseDamage + variance) * (isCrit ? 2 : 1);
+    return { damage: finalDamage, isCrit };
+  }
+
+  applyDamageToPlayer(amount) {
+    const player = this.gameState.player;
+    const effects = player.skills?.combatEffects;
+    let remaining = amount;
+
+    if (effects && effects.shield > 0) {
+      const absorbed = Math.min(effects.shield, remaining);
+      effects.shield -= absorbed;
+      remaining -= absorbed;
+      if (absorbed > 0) {
+        this.addCombatLog(`🛡️ 护盾吸收了 ${absorbed} 点伤害！${effects.shield > 0 ? `（剩余护盾: ${effects.shield}）` : '（护盾已破碎）'}`);
+      }
+    }
+
+    if (remaining > 0) {
+      player.stats.currentHp -= remaining;
+    }
+
+    return amount - remaining;
   }
 
   playerAttack() {
@@ -66,18 +101,246 @@ class CombatSystem {
     const critText = isCrit ? '【暴击！】' : '';
     this.addCombatLog(`⚔️ 你对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
 
+    this.applyDotDamage();
+
     if (enemy.currentHp <= 0) {
       return this.enemyDefeated();
     }
 
+    SkillSystem.tickCombatEffects(this.gameState);
     this.gameState.combat.playerTurn = false;
     return { type: 'playerAttack', damage, isCrit, enemyHp: enemy.currentHp };
+  }
+
+  playerUseSkill(skillId) {
+    if (!this.gameState.combat.active || !this.gameState.combat.playerTurn) return null;
+
+    const canUse = SkillSystem.canUseSkill(this.gameState, skillId);
+    if (!canUse.canUse) {
+      return { type: 'skillFailed', message: canUse.reason };
+    }
+
+    const skill = SkillSystem.getSkillById(skillId);
+    const effect = skill.effect;
+    SkillSystem.consumeMp(this.gameState, skill.mpCost);
+
+    const playerStats = this.getPlayerTotalStats();
+    const enemy = this.gameState.combat.enemy;
+    let totalDamage = 0;
+    let totalHeal = 0;
+    let logs = [];
+    logs.push(`${skill.icon} 施放【${skill.name}】！消耗 ${skill.mpCost} MP`);
+
+    switch (effect.type) {
+      case 'damage': {
+        const attacker = { attack: playerStats.attack };
+        const defender = { defense: enemy.defense };
+        const { damage, isCrit } = this.calculateDamage(attacker, defender, true, effect.multiplier);
+        enemy.currentHp -= damage;
+        totalDamage = damage;
+        const critText = isCrit ? '【暴击！】' : '';
+        logs.push(`💥 对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
+        break;
+      }
+      case 'damage_crit': {
+        const attacker = { attack: playerStats.attack };
+        const defender = { defense: enemy.defense };
+        const { damage } = this.calculateDamage(attacker, defender, true, effect.multiplier, true);
+        enemy.currentHp -= damage;
+        totalDamage = damage;
+        logs.push(`💥 对 ${enemy.name} 造成了 【必暴击！】${damage} 点伤害！`);
+        break;
+      }
+      case 'damage_lifesteal': {
+        const attacker = { attack: playerStats.attack };
+        const defender = { defense: enemy.defense };
+        const { damage, isCrit } = this.calculateDamage(attacker, defender, true, effect.multiplier);
+        enemy.currentHp -= damage;
+        totalDamage = damage;
+        const heal = Math.floor(damage * effect.lifestealPercent);
+        const actualHeal = Math.min(heal, playerStats.maxHp - this.gameState.player.stats.currentHp);
+        this.gameState.player.stats.currentHp += actualHeal;
+        totalHeal = actualHeal;
+        const critText = isCrit ? '【暴击！】' : '';
+        logs.push(`💥 对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
+        logs.push(`💚 吸血恢复了 ${actualHeal} 点生命值！`);
+        break;
+      }
+      case 'damage_stun': {
+        const attacker = { attack: playerStats.attack };
+        const defender = { defense: enemy.defense };
+        const { damage, isCrit } = this.calculateDamage(attacker, defender, true, effect.multiplier);
+        enemy.currentHp -= damage;
+        totalDamage = damage;
+        const critText = isCrit ? '【暴击！】' : '';
+        logs.push(`💥 对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
+        if (Math.random() < effect.stunChance) {
+          this.gameState.combat.enemyStunned = true;
+          logs.push(`⚡ ${enemy.name} 被眩晕了！下回合无法行动！`);
+        }
+        break;
+      }
+      case 'damage_dot': {
+        const attacker = { attack: playerStats.attack };
+        const defender = { defense: enemy.defense };
+        const { damage, isCrit } = this.calculateDamage(attacker, defender, true, effect.multiplier);
+        enemy.currentHp -= damage;
+        totalDamage = damage;
+        const critText = isCrit ? '【暴击！】' : '';
+        logs.push(`💥 对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
+        const playerEffects = this.gameState.player.skills.combatEffects;
+        playerEffects.dotTurns = effect.dotTurns;
+        playerEffects.dotDamage = Math.floor(damage * effect.dotPercent);
+        logs.push(`☠️ 敌人中毒！接下来 ${effect.dotTurns} 回合每回合额外受到 ${playerEffects.dotDamage} 点伤害！`);
+        break;
+      }
+      case 'execute': {
+        const hpPercent = enemy.currentHp / enemy.maxHp;
+        const useExecute = hpPercent < effect.executeHpPercent;
+        const multiplier = useExecute ? effect.executeMultiplier : effect.multiplier;
+        const attacker = { attack: playerStats.attack };
+        const defender = { defense: enemy.defense };
+        const { damage } = this.calculateDamage(attacker, defender, true, multiplier, useExecute);
+        enemy.currentHp -= damage;
+        totalDamage = damage;
+        if (useExecute) {
+          logs.push(`💀【处决！】敌人生命值低于 ${Math.floor(effect.executeHpPercent * 100)}%，造成毁灭性 ${damage} 点伤害！`);
+        } else {
+          logs.push(`💥 对 ${enemy.name} 造成了 ${damage} 点伤害！`);
+        }
+        const heal = Math.floor(damage * effect.lifestealPercent);
+        const actualHeal = Math.min(heal, playerStats.maxHp - this.gameState.player.stats.currentHp);
+        this.gameState.player.stats.currentHp += actualHeal;
+        totalHeal = actualHeal;
+        if (actualHeal > 0) {
+          logs.push(`💚 吸血恢复了 ${actualHeal} 点生命值！`);
+        }
+        break;
+      }
+      case 'multi_strike': {
+        for (let i = 0; i < effect.hits; i++) {
+          const isFinal = i === effect.hits - 1;
+          const attacker = { attack: playerStats.attack };
+          const defender = { defense: enemy.defense };
+          const { damage, isCrit } = this.calculateDamage(
+            attacker, defender, true, effect.multiplier,
+            isFinal && effect.finalCrit
+          );
+          enemy.currentHp -= damage;
+          totalDamage += damage;
+          const critText = isCrit ? '【暴击！】' : '';
+          logs.push(`👥 第 ${i + 1} 击！对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
+          if (isFinal && effect.lifestealPercent) {
+            const heal = Math.floor(damage * effect.lifestealPercent);
+            const actualHeal = Math.min(heal, playerStats.maxHp - this.gameState.player.stats.currentHp);
+            this.gameState.player.stats.currentHp += actualHeal;
+            totalHeal += actualHeal;
+            if (actualHeal > 0) {
+              logs.push(`💚 最后一击吸血恢复了 ${actualHeal} 点生命值！`);
+            }
+          }
+          if (enemy.currentHp <= 0) break;
+        }
+        break;
+      }
+      case 'shield': {
+        const shieldAmount = SkillSystem.applyShield(this.gameState, effect.hpPercent);
+        logs.push(`🛡️ 生成了 ${shieldAmount} 点护盾！`);
+        break;
+      }
+      case 'buff': {
+        const playerEffects = this.gameState.player.skills.combatEffects;
+        if (effect.attackMod) playerEffects.attackMod += effect.attackMod;
+        if (effect.defenseMod) playerEffects.defenseMod += effect.defenseMod;
+        const parts = [];
+        if (effect.attackMod) parts.push(`攻击+${Math.floor(effect.attackMod * 100)}%`);
+        if (effect.defenseMod) parts.push(`防御+${Math.floor(effect.defenseMod * 100)}%`);
+        logs.push(`💪 战斗状态提升：${parts.join('，')}！`);
+        break;
+      }
+      case 'ultimate': {
+        const attacker = { attack: playerStats.attack };
+        const defender = { defense: enemy.defense };
+        const { damage, isCrit } = this.calculateDamage(attacker, defender, true, effect.multiplier);
+        enemy.currentHp -= damage;
+        totalDamage = damage;
+        const critText = isCrit ? '【暴击！】' : '';
+        logs.push(`💥 终极技能！对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
+        if (effect.lifestealPercent) {
+          const heal = Math.floor(damage * effect.lifestealPercent);
+          const actualHeal = Math.min(heal, playerStats.maxHp - this.gameState.player.stats.currentHp);
+          this.gameState.player.stats.currentHp += actualHeal;
+          totalHeal = actualHeal;
+          if (actualHeal > 0) logs.push(`💚 吸血恢复了 ${actualHeal} 点生命值！`);
+        }
+        if (effect.shieldPercent) {
+          const shieldAmount = SkillSystem.applyShield(this.gameState, effect.shieldPercent);
+          logs.push(`🛡️ 额外生成了 ${shieldAmount} 点护盾！`);
+        }
+        break;
+      }
+      case 'shield_buff': {
+        const shieldAmount = SkillSystem.applyShield(this.gameState, effect.hpPercent);
+        logs.push(`🛡️ 生成了 ${shieldAmount} 点护盾！`);
+        const playerEffects = this.gameState.player.skills.combatEffects;
+        if (effect.defenseMod) {
+          playerEffects.defenseMod += effect.defenseMod;
+          logs.push(`💪 防御力永久提升 +${Math.floor(effect.defenseMod * 100)}%！`);
+        }
+        break;
+      }
+      case 'dodge_shield': {
+        const playerEffects = this.gameState.player.skills.combatEffects;
+        if (effect.dodgeTurns) {
+          playerEffects.dodgeTurns = effect.dodgeTurns;
+          logs.push(`💨 下 ${effect.dodgeTurns} 回合将闪避敌人攻击！`);
+        }
+        if (effect.hpPercent) {
+          const shieldAmount = SkillSystem.applyShield(this.gameState, effect.hpPercent);
+          logs.push(`🛡️ 生成了 ${shieldAmount} 点护盾！`);
+        }
+        break;
+      }
+    }
+
+    logs.forEach(l => this.addCombatLog(l));
+
+    this.applyDotDamage();
+
+    if (enemy.currentHp <= 0) {
+      return this.enemyDefeated();
+    }
+
+    SkillSystem.tickCombatEffects(this.gameState);
+    this.gameState.combat.playerTurn = false;
+    return {
+      type: 'skillUsed',
+      skill: skill,
+      damage: totalDamage,
+      heal: totalHeal,
+      enemyHp: enemy.currentHp
+    };
+  }
+
+  applyDotDamage() {
+    const effects = this.gameState.player.skills?.combatEffects;
+    if (!effects || effects.dotTurns <= 0 || effects.dotDamage <= 0) return;
+
+    const enemy = this.gameState.combat.enemy;
+    enemy.currentHp -= effects.dotDamage;
+    this.addCombatLog(`☠️ 毒素造成 ${effects.dotDamage} 点持续伤害！`);
+    effects.dotTurns--;
+    if (effects.dotTurns <= 0) {
+      effects.dotDamage = 0;
+    }
   }
 
   playerDefend() {
     if (!this.gameState.combat.active || !this.gameState.combat.playerTurn) return null;
 
     this.addCombatLog('🛡️ 你进入防御姿态，减少受到的伤害！');
+    SkillSystem.recoverMp(this.gameState, Math.floor(this.gameState.player.stats.maxMp * 0.1));
+    this.addCombatLog(`💙 防御姿态恢复了 ${Math.floor(this.gameState.player.stats.maxMp * 0.1)} 点MP！`);
     this.gameState.combat.playerTurn = false;
     this.gameState.combat.defending = true;
     return { type: 'playerDefend' };
@@ -103,6 +366,21 @@ class CombatSystem {
 
     const enemy = this.gameState.combat.enemy;
     const playerStats = this.getPlayerTotalStats();
+    const effects = this.gameState.player.skills?.combatEffects;
+
+    if (this.gameState.combat.enemyStunned) {
+      this.addCombatLog(`⚡ ${enemy.name} 处于眩晕状态，无法行动！`);
+      this.gameState.combat.enemyStunned = false;
+      this.gameState.combat.playerTurn = true;
+      return { type: 'enemyStunned' };
+    }
+
+    if (effects && effects.dodgeTurns > 0) {
+      this.addCombatLog(`💨 你成功闪避了 ${enemy.name} 的攻击！`);
+      this.gameState.combat.playerTurn = true;
+      return { type: 'dodged' };
+    }
+
     const attacker = { attack: enemy.attack };
     const defender = { defense: playerStats.defense };
 
@@ -112,7 +390,7 @@ class CombatSystem {
     }
 
     const { damage, isCrit } = this.calculateDamage(attacker, defender, false);
-    this.gameState.player.stats.currentHp -= damage;
+    this.applyDamageToPlayer(damage);
 
     const critText = isCrit ? '【暴击！】' : '';
     this.addCombatLog(`💥 ${enemy.name} 对你造成了 ${critText}${damage} 点伤害！`);
@@ -306,9 +584,18 @@ class CombatSystem {
       player.stats.attack += atkGain;
       player.stats.defense += defGain;
 
-      levelUps.push({ level: player.stats.level, hpGain, atkGain, defGain });
+      const skillResult = SkillSystem.addLevelUpSkillPoint(this.gameState, 1);
+
+      levelUps.push({
+        level: player.stats.level,
+        hpGain,
+        atkGain,
+        defGain,
+        skillPoints: skillResult.skillPoints,
+        maxMpGain: skillResult.maxMpGain
+      });
       this.addCombatLog(`🎊 升级！你现在是 ${player.stats.level} 级了！`);
-      this.addCombatLog(`   HP +${hpGain}, ATK +${atkGain}, DEF +${defGain}`);
+      this.addCombatLog(`   HP +${hpGain}, ATK +${atkGain}, DEF +${defGain}, MP +${skillResult.maxMpGain}, 技能点 +${skillResult.skillPoints}`);
 
       DifficultySystem.updateDifficultyScoreRealtime(this.gameState, 'level_up', 1);
     }
@@ -320,6 +607,7 @@ class CombatSystem {
     this.gameState.combat.active = false;
     this.gameState.combat.enemy = null;
     this.gameState.combat.log = [];
+    SkillSystem.resetCombatEffects(this.gameState);
     return victory;
   }
 

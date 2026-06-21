@@ -158,9 +158,63 @@ class Game {
         }
 
         if (result && result.type === 'victory') {
+            if (result.levelUp && result.levelUp.length > 0) {
+                const totalPoints = result.levelUp.reduce((s, l) => s + (l.skillPoints || 0), 0);
+                if (totalPoints > 0) {
+                    setTimeout(() => {
+                        this.showNotification(`🎊 升级获得 ${totalPoints} 技能点！点击"技能树"学习新技能！`);
+                    }, 500);
+                }
+            }
             this.showNotification('🎉 战斗胜利！');
             this.render();
             return;
+        }
+
+        setTimeout(async () => {
+            if (this.gameState.combat.active && !this.gameState.combat.playerTurn) {
+                const enemyResult = this.combatSystem.enemyTurn();
+                this.render();
+
+                if (enemyResult && enemyResult.type === 'defeat') {
+                    await this.gameOver();
+                }
+            }
+        }, 800);
+    }
+
+    async combatSkillAction(skillId) {
+        if (!this.gameState || !this.gameState.combat.active) return;
+
+        const result = this.combatSystem.playerUseSkill(skillId);
+        if (!result) return;
+
+        if (result.type === 'skillFailed') {
+            this.showNotification(`❌ ${result.message}`);
+            return;
+        }
+
+        this.render();
+
+        if (result && result.type === 'victory') {
+            if (result.levelUp && result.levelUp.length > 0) {
+                const totalPoints = result.levelUp.reduce((s, l) => s + (l.skillPoints || 0), 0);
+                if (totalPoints > 0) {
+                    setTimeout(() => {
+                        this.showNotification(`🎊 升级获得 ${totalPoints} 技能点！点击"技能树"学习新技能！`);
+                    }, 500);
+                }
+            }
+            this.showNotification('🎉 战斗胜利！');
+            this.render();
+            return;
+        }
+
+        if (result.type === 'skillUsed') {
+            const skill = SkillSystem.getSkillById(skillId);
+            setTimeout(() => {
+                this.showNotification(`${skill.icon} 施放【${skill.name}】！`);
+            }, 100);
         }
 
         setTimeout(async () => {
@@ -748,9 +802,15 @@ class Game {
         document.getElementById('hp-text').textContent = `${player.stats.currentHp}/${totalStats.maxHp}`;
         document.getElementById('hp-fill').style.width = `${hpPercent}%`;
 
+        const mpPercent = (player.stats.currentMp / player.stats.maxMp) * 100;
+        document.getElementById('mp-text').textContent = `${player.stats.currentMp}/${player.stats.maxMp}`;
+        document.getElementById('mp-fill').style.width = `${mpPercent}%`;
+
         const expPercent = (player.stats.exp / player.stats.expToNext) * 100;
         document.getElementById('exp-text').textContent = `${player.stats.exp}/${player.stats.expToNext}`;
         document.getElementById('exp-fill').style.width = `${expPercent}%`;
+
+        document.getElementById('skill-points-text').textContent = player.skills?.skillPoints || 0;
 
         const displayAttack = totalStats.attack + weatherEffects.attackMod;
         const displayDefense = totalStats.defense + weatherEffects.defenseMod;
@@ -1136,9 +1196,23 @@ class Game {
         document.getElementById('enemy-icon').textContent = combat.enemy.icon;
         document.getElementById('enemy-name').textContent = combat.enemy.name;
         
-        const hpPercent = (combat.enemy.currentHp / combat.enemy.maxHp) * 100;
+        const enemyHpPercent = (combat.enemy.currentHp / combat.enemy.maxHp) * 100;
         document.getElementById('enemy-hp-text').textContent = `${combat.enemy.currentHp}/${combat.enemy.maxHp}`;
-        document.getElementById('enemy-hp-fill').style.width = `${hpPercent}%`;
+        document.getElementById('enemy-hp-fill').style.width = `${enemyHpPercent}%`;
+
+        const player = this.gameState.player;
+        const totalStats = CharacterSystem.getPlayerTotalStats(this.gameState);
+        
+        const combatHpPercent = (player.stats.currentHp / totalStats.maxHp) * 100;
+        document.getElementById('combat-hp-text').textContent = `${player.stats.currentHp}/${totalStats.maxHp}`;
+        document.getElementById('combat-hp-fill').style.width = `${combatHpPercent}%`;
+
+        const combatMpPercent = (player.stats.currentMp / player.stats.maxMp) * 100;
+        document.getElementById('combat-mp-text').textContent = `${player.stats.currentMp}/${player.stats.maxMp}`;
+        document.getElementById('combat-mp-fill').style.width = `${combatMpPercent}%`;
+
+        this.renderCombatEffects();
+        this.renderCombatSkills();
 
         const logElement = document.getElementById('combat-log');
         logElement.innerHTML = combat.log.map(msg => 
@@ -1149,6 +1223,83 @@ class Game {
         const buttons = document.querySelectorAll('.combat-btn');
         buttons.forEach(btn => {
             btn.disabled = !combat.playerTurn;
+        });
+    }
+
+    renderCombatEffects() {
+        const display = document.getElementById('combat-effects-display');
+        if (!display) return;
+
+        const effects = this.gameState.player.skills?.combatEffects;
+        if (!effects) {
+            display.innerHTML = '';
+            return;
+        }
+
+        let html = '';
+        if (effects.shield > 0) {
+            html += `<div class="combat-effect-item effect-shield" title="护盾">🛡️ 护盾: ${effects.shield}</div>`;
+        }
+        if (effects.attackMod > 0) {
+            html += `<div class="combat-effect-item effect-buff" title="攻击增强">💪 攻击+${Math.floor(effects.attackMod * 100)}%</div>`;
+        }
+        if (effects.defenseMod > 0) {
+            html += `<div class="combat-effect-item effect-buff" title="防御增强">🛡️ 防御+${Math.floor(effects.defenseMod * 100)}%</div>`;
+        }
+        if (effects.dodgeTurns > 0) {
+            html += `<div class="combat-effect-item effect-dodge" title="闪避">💨 闪避(${effects.dodgeTurns}回合)</div>`;
+        }
+        if (effects.dotTurns > 0) {
+            html += `<div class="combat-effect-item effect-dot" title="中毒效果">☠️ 毒伤(${effects.dotDamage}x${effects.dotTurns}回合)</div>`;
+        }
+        if (this.gameState.combat.enemyStunned) {
+            html += `<div class="combat-effect-item effect-stun" title="敌人眩晕">⚡ 敌人眩晕中</div>`;
+        }
+
+        display.innerHTML = html;
+    }
+
+    renderCombatSkills() {
+        const grid = document.getElementById('combat-skills-grid');
+        const skillsContainer = document.getElementById('combat-skills');
+        if (!grid || !skillsContainer) return;
+
+        const learnedSkills = SkillSystem.getLearnedSkillsForCombat(this.gameState);
+        
+        if (learnedSkills.length === 0) {
+            skillsContainer.classList.add('hidden');
+            return;
+        }
+        skillsContainer.classList.remove('hidden');
+
+        const combat = this.gameState.combat;
+        const player = this.gameState.player;
+
+        let html = '';
+        learnedSkills.forEach(skill => {
+            const branch = SkillSystem.getBranchBySkillId(skill.id);
+            const canUse = player.stats.currentMp >= skill.mpCost && combat.playerTurn;
+            const disabledClass = canUse ? '' : 'skill-btn-disabled';
+            const color = branch?.color || '#95A5A6';
+
+            html += `
+                <button class="combat-skill-btn ${disabledClass}" 
+                        data-skill-id="${skill.id}"
+                        style="border-color: ${color}; color: ${color};"
+                        title="${skill.description}&#10;消耗 MP: ${skill.mpCost}">
+                    <div class="skill-btn-icon">${skill.icon}</div>
+                    <div class="skill-btn-name">${skill.name}</div>
+                    <div class="skill-btn-mp">💙 ${skill.mpCost}</div>
+                </button>
+            `;
+        });
+        grid.innerHTML = html;
+
+        grid.querySelectorAll('.combat-skill-btn:not(.skill-btn-disabled)').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const skillId = btn.dataset.skillId;
+                this.combatSkillAction(skillId);
+            });
         });
     }
 
@@ -1184,6 +1335,136 @@ class Game {
         this.combatSystem = null;
         this.showScreen('main-menu');
         this.showNotification('👋 已保存游戏，返回主菜单');
+    }
+
+    openSkillTree() {
+        if (this.gameState.combat.active) {
+            this.showNotification('❌ 战斗中无法打开技能树！');
+            return;
+        }
+        this.currentSkillBranch = 'warrior';
+        document.getElementById('skill-tree-overlay').classList.remove('hidden');
+        this.renderSkillTree();
+    }
+
+    closeSkillTree() {
+        document.getElementById('skill-tree-overlay').classList.add('hidden');
+        this.render();
+    }
+
+    switchSkillBranch(branchId) {
+        this.currentSkillBranch = branchId;
+        document.querySelectorAll('.skill-tree-tab').forEach(tab => {
+            if (tab.dataset.branch === branchId) {
+                tab.classList.add('active');
+                const branch = SKILL_BRANCHES[branchId];
+                if (branch) {
+                    tab.style.borderColor = branch.color;
+                    tab.style.color = branch.color;
+                }
+            } else {
+                tab.classList.remove('active');
+                tab.style.borderColor = '';
+                tab.style.color = '';
+            }
+        });
+        this.renderSkillTree();
+    }
+
+    renderSkillTree() {
+        if (!this.gameState) return;
+
+        const branchId = this.currentSkillBranch || 'warrior';
+        const branch = SKILL_BRANCHES[branchId];
+        if (!branch) return;
+
+        document.getElementById('skill-tree-points').textContent = this.gameState.player.skills?.skillPoints || 0;
+        document.getElementById('skill-tree-points').style.color = 
+            (this.gameState.player.skills?.skillPoints || 0) > 0 ? '#2ECC71' : '#95A5A6';
+
+        const descEl = document.getElementById('skill-tree-branch-desc');
+        descEl.innerHTML = `
+            <div class="branch-desc-icon" style="color: ${branch.color};">${branch.icon}</div>
+            <div class="branch-desc-text">
+                <div class="branch-desc-name" style="color: ${branch.color};">${branch.name}</div>
+                <div class="branch-desc-detail">${branch.description}</div>
+            </div>
+        `;
+
+        const content = document.getElementById('skill-tree-content');
+        const learned = this.gameState.player.skills?.learnedSkills || [];
+        const skillPoints = this.gameState.player.skills?.skillPoints || 0;
+
+        let html = '';
+        for (let tier = 1; tier <= 3; tier++) {
+            const tierSkills = branch.skills.filter(s => s.tier === tier);
+            html += `<div class="skill-tier">
+                <div class="skill-tier-title" style="color: ${branch.color};">第 ${tier} 阶</div>
+                <div class="skill-tier-grid">`;
+            
+            tierSkills.forEach(skill => {
+                const isLearned = learned.includes(skill.id);
+                const prereqOk = !skill.prerequisite || learned.includes(skill.prerequisite);
+                const canLearn = !isLearned && prereqOk && skillPoints > 0;
+                
+                let statusClass = 'skill-card';
+                if (isLearned) statusClass += ' skill-learned';
+                else if (!prereqOk) statusClass += ' skill-locked';
+                else if (skillPoints <= 0) statusClass += ' skill-no-points';
+
+                const borderColor = isLearned ? branch.color : (!prereqOk ? '#555' : '#666');
+                let prereqText = '';
+                if (skill.prerequisite && !prereqOk) {
+                    const prereqSkill = SkillSystem.getSkillById(skill.prerequisite);
+                    prereqText = `<div class="skill-prereq">🔒 前置: ${prereqSkill?.name || skill.prerequisite}</div>`;
+                }
+
+                html += `
+                    <div class="${statusClass}" 
+                         data-skill-id="${skill.id}"
+                         style="border-color: ${borderColor};">
+                        <div class="skill-card-header">
+                            <div class="skill-icon" style="color: ${isLearned ? branch.color : '#aaa'};">${skill.icon}</div>
+                            <div class="skill-info">
+                                <div class="skill-name" style="color: ${isLearned ? branch.color : 'var(--text-primary)'};">${skill.name}</div>
+                                <div class="skill-mp-cost">💙 消耗 MP: ${skill.mpCost}</div>
+                            </div>
+                            ${isLearned ? '<div class="skill-learned-tag">✓ 已学</div>' : ''}
+                        </div>
+                        <div class="skill-description">${skill.description}</div>
+                        ${prereqText}
+                        <div class="skill-actions">
+                            ${isLearned 
+                                ? `<button class="learned-btn" disabled>已掌握</button>`
+                                : canLearn 
+                                    ? `<button class="learn-btn" style="background: ${branch.color};" data-learn-skill="${skill.id}">🌟 学习 (1技能点)</button>`
+                                    : `<button class="learn-btn disabled" disabled>无法学习</button>`
+                            }
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div></div>';
+        }
+
+        content.innerHTML = html;
+
+        content.querySelectorAll('[data-learn-skill]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const skillId = btn.dataset.learnSkill;
+                this.learnSkillAction(skillId);
+            });
+        });
+    }
+
+    learnSkillAction(skillId) {
+        const result = SkillSystem.learnSkill(this.gameState, skillId);
+        if (result.success) {
+            this.showNotification(`✅ ${result.message}`);
+            this.renderSkillTree();
+        } else {
+            this.showNotification(`❌ ${result.message}`);
+        }
     }
 
     init() {
@@ -1314,6 +1595,34 @@ class Game {
                 }
             });
         }
+
+        const openSkillTreeBtn = document.getElementById('open-skill-tree-btn');
+        if (openSkillTreeBtn) {
+            openSkillTreeBtn.addEventListener('click', () => this.openSkillTree());
+        }
+
+        const closeSkillTreeBtn = document.getElementById('close-skill-tree-btn');
+        if (closeSkillTreeBtn) {
+            closeSkillTreeBtn.addEventListener('click', () => this.closeSkillTree());
+        }
+
+        const skillTreeOverlay = document.getElementById('skill-tree-overlay');
+        if (skillTreeOverlay) {
+            skillTreeOverlay.addEventListener('click', (e) => {
+                if (e.target.id === 'skill-tree-overlay') {
+                    this.closeSkillTree();
+                }
+            });
+        }
+
+        document.querySelectorAll('.skill-tree-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const branchId = tab.dataset.branch;
+                if (branchId) {
+                    this.switchSkillBranch(branchId);
+                }
+            });
+        });
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.isMinimapMaximized) {
