@@ -179,10 +179,23 @@ class CombatSystem {
     }
 
     let droppedItem = null;
-    if (Math.random() < enemy.dropRate) {
-      droppedItem = getRandomEquipment(this.gameState.dungeon.floor);
+    const adjustedDropRate = DifficultySystem.getAdjustedDropRate(enemy.dropRate, this.gameState, false);
+    const isRareDrop = Math.random() < DifficultySystem.getAdjustedDropRate(0.15, this.gameState, true);
+    
+    if (Math.random() < adjustedDropRate) {
+      if (isRareDrop) {
+        let attempts = 0;
+        do {
+          droppedItem = getRandomEquipment(this.gameState.dungeon.floor);
+          attempts++;
+        } while ((droppedItem.rarity === 'common' || droppedItem.rarity === 'uncommon') && attempts < 10);
+      } else {
+        droppedItem = getRandomEquipment(this.gameState.dungeon.floor);
+      }
       this.gameState.player.inventory.push(droppedItem);
-      this.addCombatLog(`📦 ${enemy.name} 掉落了 ${droppedItem.icon} ${droppedItem.name}！`);
+      const rareText = isRareDrop ? '【稀有掉落】' : '';
+      this.addCombatLog(`📦 ${enemy.name} ${rareText}掉落了 ${droppedItem.icon} ${droppedItem.name}！`);
+      DifficultySystem.updateFloorStats(this.gameState, 'item_found', 1);
     }
 
     const levelResult = this.checkLevelUp();

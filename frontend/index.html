@@ -56,6 +56,19 @@
                     <h3 class="panel-title">🌤️ 当前天气</h3>
                     <div id="weather-grid" class="weather-grid"></div>
                 </div>
+                <div id="difficulty-panel" class="difficulty-panel">
+                    <h3 class="panel-title">⚖️ 难度等级</h3>
+                    <div class="difficulty-name" id="difficulty-name">⚖️ 普通</div>
+                    <div class="bar-container" style="margin: 8px 0;">
+                        <div class="bar difficulty-bar">
+                            <div class="bar-fill" id="difficulty-score-fill" style="width: 33%;"></div>
+                        </div>
+                        <div class="bar-label" style="justify-content: center; margin-top: 4px;">
+                            <span id="difficulty-score-text" style="font-size: 0.85rem;">难度评分: 0</span>
+                        </div>
+                    </div>
+                    <div id="difficulty-stats" class="difficulty-stats"></div>
+                </div>
                 <div class="player-panel">
                     <h3 class="panel-title">🧙 角色状态</h3>
                     <div class="player-stats">
@@ -238,6 +251,11 @@
                     <span class="stat-label">角色等级</span>
                     <span class="stat-value" id="final-level">1</span>
                 </div>
+                <div class="final-stat">
+                    <span class="stat-icon">⚖️</span>
+                    <span class="stat-label">最终难度</span>
+                    <span class="stat-value" id="final-difficulty">普通</span>
+                </div>
             </div>
             <div class="medal-display" id="medal-display">🥉</div>
             <div class="gameover-actions">
@@ -318,6 +336,7 @@
 
     <script src="js/data.js"></script>
     <script src="js/weatherSystem.js"></script>
+    <script src="js/difficultySystem.js"></script>
     <script src="js/mapGenerator.js"></script>
     <script src="js/combatSystem.js"></script>
     <script src="js/characterSystem.js"></script>

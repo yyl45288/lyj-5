@@ -1,0 +1,28 @@
+{
+  "submissions": [
+    {
+      "id": "diff_8e35ec4553ca",
+      "floor": 5,
+      "kills": 20,
+      "score": 1500,
+      "difficulty": "hard",
+      "difficultyScore": 35,
+      "timestamp": "2026-06-21T07:37:13.415995"
+    }
+  ],
+  "difficultyDistribution": {
+    "very_easy": 0,
+    "easy": 0,
+    "normal": 0,
+    "hard": 1,
+    "very_hard": 0,
+    "extreme": 0
+  },
+  "stats": {
+    "totalGames": 1,
+    "averageScore": 1500.0,
+    "averageFloor": 5.0,
+    "averageKills": 20.0,
+    "averageDifficultyScore": 35.0
+  }
+}

@@ -49,20 +49,19 @@ class CharacterSystem {
       }
     }
     
+    gameState = DifficultySystem.ensureGameStateCompatibility(gameState);
+    
     return gameState;
   }
 
   static createNewGameState() {
     const player = this.createNewPlayer();
-    const dungeon = generateDungeon(50, 50, 1);
-    player.position = { ...dungeon.playerPosition };
-    const weatherState = WeatherSystem.generateWeatherForFloor(1);
-    const floor = 1;
-
+    const difficultyState = DifficultySystem.createEmptyDifficultyState();
     const gameState = {
       player: player,
-      dungeon: dungeon,
-      weatherState: weatherState,
+      dungeon: null,
+      weatherState: null,
+      difficultyState: difficultyState,
       combat: {
         active: false,
         enemy: null,
@@ -76,8 +75,17 @@ class CharacterSystem {
       lastKillTime: 0,
       totalGoldCollected: 0,
       merchantsVisited: 0,
-      quests: generateFloorQuests(floor, 2)
+      quests: null
     };
+
+    const dungeon = generateDungeon(50, 50, 1, gameState);
+    player.position = { ...dungeon.playerPosition };
+    const weatherState = WeatherSystem.generateWeatherForFloor(1, gameState);
+    const floor = 1;
+
+    gameState.dungeon = dungeon;
+    gameState.weatherState = weatherState;
+    gameState.quests = generateFloorQuests(floor, 2);
 
     const activeWeathers = WeatherSystem.getActiveWeatherDescriptions(weatherState);
     if (activeWeathers.length > 0) {
@@ -90,6 +98,13 @@ class CharacterSystem {
       gameState.gameLog.push(`🛒 第 ${floor} 层出现了 ${dungeon.merchantCount} 位商人！寻找他们进行交易吧！`);
     }
     gameState.gameLog.push(`📜 新任务已发布，完成任务可获得金币奖励！`);
+
+    const difficultyInfo = DifficultySystem.getDifficultyDescription(gameState);
+    gameState.gameLog.push(`⚖️ 当前难度：${difficultyInfo.icon} ${difficultyInfo.name} - ${difficultyInfo.description}`);
+    
+    if (dungeon.elitePlaced) {
+      gameState.gameLog.push(`💎 警告：本层出现了精英怪物！`);
+    }
 
     this.exploreArea(dungeon, player.position.x, player.position.y, gameState);
 
@@ -306,9 +321,15 @@ class CharacterSystem {
     return accessory.weatherProtection || false;
   }
 
-  static nextFloor(gameState) {
+  static async nextFloor(gameState) {
     const newFloor = gameState.dungeon.floor + 1;
-    const newDungeon = generateDungeon(50, 50, newFloor);
+    
+    DifficultySystem.updateHistory(gameState, false);
+    DifficultySystem.resetFloorStats(gameState);
+    
+    await DifficultySystem.updateDifficulty(gameState);
+    
+    const newDungeon = generateDungeon(50, 50, newFloor, gameState);
     gameState.dungeon = newDungeon;
     gameState.player.position = { ...newDungeon.playerPosition };
     gameState.score += 100 * newFloor;
@@ -322,6 +343,13 @@ class CharacterSystem {
       });
     } else {
       gameState.gameLog.push(`☀️ 本层天气晴朗。`);
+    }
+
+    const difficultyInfo = DifficultySystem.getDifficultyDescription(gameState);
+    gameState.gameLog.push(`⚖️ 当前难度：${difficultyInfo.icon} ${difficultyInfo.name}（难度评分：${Math.round(difficultyInfo.score)}）`);
+    
+    if (newDungeon.elitePlaced) {
+      gameState.gameLog.push(`💎 警告：本层出现了精英怪物！`);
     }
 
     this.exploreArea(newDungeon, gameState.player.position.x, gameState.player.position.y, gameState);

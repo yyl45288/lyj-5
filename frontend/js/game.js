@@ -58,14 +58,14 @@ class Game {
         }
     }
 
-    movePlayer(direction) {
+    async movePlayer(direction) {
         if (!this.gameState || this.gameState.combat.active) return;
 
         const result = CharacterSystem.movePlayer(this.gameState, direction);
         if (!result) return;
 
         if (result.type === 'death') {
-            this.gameOver();
+            await this.gameOver();
             return;
         }
 
@@ -86,7 +86,7 @@ class Game {
 
         if (result.type === 'stairs') {
             Game.updateQuestProgress(this.gameState, 'reach_stairs', 1);
-            CharacterSystem.nextFloor(this.gameState);
+            await CharacterSystem.nextFloor(this.gameState);
             const floor = this.gameState.dungeon.floor;
             this.showNotification(`🚪 进入第 ${floor} 层！`);
             
@@ -108,6 +108,11 @@ class Game {
                     this.showNotification(`${activeWeathers.map(w => w.icon + w.name).join(' ')} 天气生效！`);
                 }, 2400);
             }
+
+            const difficultyInfo = DifficultySystem.getDifficultyDescription(this.gameState);
+            setTimeout(() => {
+                this.showNotification(`${difficultyInfo.icon} ${difficultyInfo.name} 难度`);
+            }, 3600);
         }
 
         this.render();
@@ -119,7 +124,7 @@ class Game {
         tile.enemy = null;
     }
 
-    combatAction(action) {
+    async combatAction(action) {
         if (!this.gameState || !this.gameState.combat.active) return;
 
         let result;
@@ -143,7 +148,7 @@ class Game {
         this.render();
 
         if (result && result.type === 'defeat') {
-            this.gameOver();
+            await this.gameOver();
             return;
         }
 
@@ -158,13 +163,13 @@ class Game {
             return;
         }
 
-        setTimeout(() => {
+        setTimeout(async () => {
             if (this.gameState.combat.active && !this.gameState.combat.playerTurn) {
                 const enemyResult = this.combatSystem.enemyTurn();
                 this.render();
 
                 if (enemyResult && enemyResult.type === 'defeat') {
-                    this.gameOver();
+                    await this.gameOver();
                 }
             }
         }, 800);
@@ -637,12 +642,21 @@ class Game {
             this.gameState.dungeon.floor
         );
 
+        DifficultySystem.updateHistory(this.gameState, true);
+        DifficultySystem.submitDifficultyData(this.gameState);
+
         StorageManager.clearLocalSave();
 
         document.getElementById('final-score').textContent = finalScore.toLocaleString();
         document.getElementById('final-kills').textContent = this.gameState.kills;
         document.getElementById('final-floor').textContent = this.gameState.dungeon.floor;
         document.getElementById('final-level').textContent = this.gameState.player.stats.level;
+
+        const difficultyInfo = DifficultySystem.getDifficultyDescription(this.gameState);
+        const finalDifficultyEl = document.getElementById('final-difficulty');
+        if (finalDifficultyEl) {
+            finalDifficultyEl.textContent = `${difficultyInfo.icon} ${difficultyInfo.name}`;
+        }
 
         let medal = '🥉';
         if (finalScore >= 10000) medal = '🥇';
@@ -677,6 +691,7 @@ class Game {
 
         this.renderPlayerStats();
         this.renderWeatherPanel();
+        this.renderDifficultyPanel();
         this.renderMap();
         this.renderMinimap();
         this.renderInventory();
@@ -688,6 +703,33 @@ class Game {
             this.renderCombat();
         } else {
             document.getElementById('combat-overlay').classList.add('hidden');
+        }
+    }
+
+    renderDifficultyPanel() {
+        const panel = document.getElementById('difficulty-panel');
+        if (!panel) return;
+
+        const diffInfo = DifficultySystem.getDifficultyDescription(this.gameState);
+        
+        document.getElementById('difficulty-name').textContent = `${diffInfo.icon} ${diffInfo.name}`;
+        document.getElementById('difficulty-name').style.color = diffInfo.color;
+        
+        const scorePercent = Math.max(0, Math.min(100, (diffInfo.score + 50) / 1.5));
+        document.getElementById('difficulty-score-fill').style.width = `${scorePercent}%`;
+        document.getElementById('difficulty-score-fill').style.background = diffInfo.color;
+        document.getElementById('difficulty-score-text').textContent = `难度评分: ${Math.round(diffInfo.score)}`;
+        
+        const diffStats = document.getElementById('difficulty-stats');
+        if (diffStats) {
+            diffStats.innerHTML = `
+                <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                    <div>敌人强度: ${Math.round((diffInfo.enemyHpMod - 1) * 100) >= 0 ? '+' : ''}${Math.round((diffInfo.enemyHpMod - 1) * 100)}%</div>
+                    <div>掉落倍率: ${diffInfo.dropRateMod.toFixed(2)}x</div>
+                    <div>精英概率: ${diffInfo.eliteChanceMod.toFixed(1)}x</div>
+                    <div>经验倍率: ${diffInfo.expMod.toFixed(2)}x</div>
+                </div>
+            `;
         }
     }
 

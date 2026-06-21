@@ -12,6 +12,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SAVES_DIR = os.path.join(BASE_DIR, 'saves')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 SCORES_FILE = os.path.join(DATA_DIR, 'scores.json')
+DIFFICULTY_FILE = os.path.join(DATA_DIR, 'difficulty_stats.json')
 
 os.makedirs(SAVES_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -19,6 +20,27 @@ os.makedirs(DATA_DIR, exist_ok=True)
 if not os.path.exists(SCORES_FILE):
     with open(SCORES_FILE, 'w', encoding='utf-8') as f:
         json.dump({'records': []}, f, ensure_ascii=False, indent=2)
+
+if not os.path.exists(DIFFICULTY_FILE):
+    with open(DIFFICULTY_FILE, 'w', encoding='utf-8') as f:
+        json.dump({
+            'submissions': [],
+            'difficultyDistribution': {
+                'very_easy': 0,
+                'easy': 0,
+                'normal': 0,
+                'hard': 0,
+                'very_hard': 0,
+                'extreme': 0
+            },
+            'stats': {
+                'totalGames': 0,
+                'averageScore': 0,
+                'averageFloor': 0,
+                'averageKills': 0,
+                'averageDifficultyScore': 0
+            }
+        }, f, ensure_ascii=False, indent=2)
 
 
 @app.route('/')
@@ -178,6 +200,112 @@ def list_saves():
         return jsonify({
             'success': False,
             'saves': [],
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/difficulty/leaderboard-avg', methods=['GET'])
+def get_leaderboard_average():
+    try:
+        with open(SCORES_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        scores = data.get('records', [])
+        if not scores:
+            return jsonify({
+                'success': True,
+                'average': 0,
+                'count': 0
+            })
+        
+        total_score = sum(s['score'] for s in scores)
+        average = total_score / len(scores)
+        
+        return jsonify({
+            'success': True,
+            'average': round(average, 2),
+            'count': len(scores)
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'average': 0,
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/difficulty/submit', methods=['POST'])
+def submit_difficulty_data():
+    try:
+        data = request.get_json()
+        
+        submission = {
+            'id': f'diff_{uuid.uuid4().hex[:12]}',
+            'floor': data.get('floor', 1),
+            'kills': data.get('kills', 0),
+            'score': data.get('score', 0),
+            'difficulty': data.get('difficulty', 'normal'),
+            'difficultyScore': data.get('difficultyScore', 0),
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        with open(DIFFICULTY_FILE, 'r', encoding='utf-8') as f:
+            diff_data = json.load(f)
+        
+        diff_data['submissions'].append(submission)
+        
+        difficulty = submission['difficulty']
+        if difficulty in diff_data['difficultyDistribution']:
+            diff_data['difficultyDistribution'][difficulty] += 1
+        
+        submissions = diff_data['submissions']
+        if submissions:
+            diff_data['stats']['totalGames'] = len(submissions)
+            diff_data['stats']['averageScore'] = round(
+                sum(s['score'] for s in submissions) / len(submissions), 2
+            )
+            diff_data['stats']['averageFloor'] = round(
+                sum(s['floor'] for s in submissions) / len(submissions), 2
+            )
+            diff_data['stats']['averageKills'] = round(
+                sum(s['kills'] for s in submissions) / len(submissions), 2
+            )
+            diff_data['stats']['averageDifficultyScore'] = round(
+                sum(s['difficultyScore'] for s in submissions) / len(submissions), 2
+            )
+        
+        diff_data['submissions'] = diff_data['submissions'][-100:]
+        
+        with open(DIFFICULTY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(diff_data, f, ensure_ascii=False, indent=2)
+        
+        return jsonify({
+            'success': True,
+            'submission': submission,
+            'stats': diff_data['stats']
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/difficulty/stats', methods=['GET'])
+def get_difficulty_stats():
+    try:
+        with open(DIFFICULTY_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        return jsonify({
+            'success': True,
+            'stats': data.get('stats', {}),
+            'difficultyDistribution': data.get('difficultyDistribution', {}),
+            'recentSubmissions': data.get('submissions', [])[-10:]
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
             'message': str(e)
         }), 500
 

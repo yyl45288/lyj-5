@@ -7,18 +7,19 @@ class DungeonGenerator {
     this.rooms = [];
   }
 
-  generate() {
+  generate(gameState = null) {
     this.initializeTiles();
     this.generateRooms();
     this.connectRooms();
     this.placeStairs();
-    this.placeEnemies();
-    this.placeItems();
+    const enemyResult = this.placeEnemies(gameState);
+    this.placeItems(gameState);
     const merchantCount = this.placeMerchants() || 0;
     this.placePlayer();
     const map = this.createDungeonMap();
     map.merchantCount = merchantCount;
     map.floor = this.floor;
+    map.elitePlaced = enemyResult.elitePlaced || false;
     return map;
   }
 
@@ -135,10 +136,11 @@ class DungeonGenerator {
     this.tiles[stairsY][stairsX].type = 'stairs';
   }
 
-  placeEnemies() {
+  placeEnemies(gameState = null) {
     const enemyCount = 5 + this.floor * 3;
     let placed = 0;
     let attempts = 0;
+    let elitePlaced = false;
 
     while (placed < enemyCount && attempts < 200) {
       attempts++;
@@ -149,14 +151,30 @@ class DungeonGenerator {
       const y = Math.floor(Math.random() * (room.height - 2)) + room.y + 1;
 
       if (this.isValidPlacement(x, y)) {
+        let enemy = getRandomEnemy(this.floor);
+
+        if (gameState && !elitePlaced && DifficultySystem.shouldTriggerEliteEvent(gameState)) {
+          enemy = DifficultySystem.generateEliteEnemy(enemy, gameState);
+          elitePlaced = true;
+          if (gameState.difficultyState) {
+            gameState.difficultyState.eliteEventTriggered = true;
+          }
+        }
+
+        if (gameState) {
+          enemy = DifficultySystem.applyDifficultyToEnemy(enemy, gameState);
+        }
+
         this.tiles[y][x].type = 'enemy';
-        this.tiles[y][x].enemy = getRandomEnemy(this.floor);
+        this.tiles[y][x].enemy = enemy;
         placed++;
       }
     }
+
+    return { placed, elitePlaced };
   }
 
-  placeItems() {
+  placeItems(gameState = null) {
     const itemCount = 3 + Math.floor(this.floor / 2);
     let placed = 0;
     let attempts = 0;
@@ -170,8 +188,20 @@ class DungeonGenerator {
       const y = Math.floor(Math.random() * (room.height - 2)) + room.y + 1;
 
       if (this.isValidPlacement(x, y)) {
+        let item = getRandomEquipment(this.floor);
+        if (gameState) {
+          const dropRate = DifficultySystem.getAdjustedDropRate(0.3, gameState, false);
+          const rareDropRate = DifficultySystem.getAdjustedDropRate(0.1, gameState, true);
+          
+          if (Math.random() < rareDropRate) {
+            item = getRandomEquipment(this.floor);
+            while (item.rarity === 'common' || item.rarity === 'uncommon') {
+              item = getRandomEquipment(this.floor);
+            }
+          }
+        }
         this.tiles[y][x].type = 'item';
-        this.tiles[y][x].item = getRandomEquipment(this.floor);
+        this.tiles[y][x].item = item;
         placed++;
       }
     }
@@ -235,7 +265,7 @@ class DungeonGenerator {
   }
 }
 
-function generateDungeon(width, height, floor) {
+function generateDungeon(width, height, floor, gameState = null) {
   const generator = new DungeonGenerator(width, height, floor);
-  return generator.generate();
+  return generator.generate(gameState);
 }
