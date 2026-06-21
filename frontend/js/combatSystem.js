@@ -10,36 +10,59 @@ class CombatSystem {
       playerTurn: true,
       log: [`遭遇了 ${enemy.name}！`],
       enemyStunned: false,
-      defending: false
+      defending: false,
+      enemyDots: [],
+      killsThisCombat: 0
     };
     SkillSystem.resetCombatEffects(this.gameState);
+    
+    const effects = this.getEquipmentsSpecialEffects();
+    effects.forEach(effect => {
+      if (effect.specialEffect) {
+        effect.usedThisCombat = false;
+      }
+    });
+    
     this.addCombatLog(`${enemy.icon} ${enemy.name} 出现了！`);
+    
+    const turnStartEffects = this.applyEquipmentOnTurnStartEffects();
+    turnStartEffects.forEach(msg => this.addCombatLog(msg));
+    
     return this.gameState.combat;
   }
 
+  applyEnemyDotDamage() {
+    if (!this.gameState.combat.enemyDots || this.gameState.combat.enemyDots.length === 0) return;
+    
+    const playerAttack = this.getPlayerTotalStats().attack;
+    let totalDotDamage = 0;
+    
+    this.gameState.combat.enemyDots = this.gameState.combat.enemyDots.filter(dot => {
+      if (dot.turns <= 0) return false;
+      
+      const damage = Math.floor(playerAttack * dot.damagePercent);
+      this.gameState.combat.enemy.currentHp -= damage;
+      totalDotDamage += damage;
+      dot.turns--;
+      
+      const effectName = dot.type === 'burn' ? '燃烧' : (dot.type === 'curse' ? '诅咒' : '持续伤害');
+      this.addCombatLog(`☠️ ${dot.name}${effectName}造成 ${damage} 点伤害！剩余 ${dot.turns} 回合`);
+      
+      return dot.turns > 0;
+    });
+    
+    return totalDotDamage;
+  }
+
   getPlayerTotalStats() {
-    const player = this.gameState.player;
-    let attack = player.stats.attack;
-    let defense = player.stats.defense;
-    let maxHp = player.stats.maxHp;
+    const baseStats = CharacterSystem.getPlayerTotalStats(this.gameState);
+    const effects = this.gameState.player.skills?.combatEffects;
+    
+    let attack = baseStats.attack;
+    let defense = baseStats.defense;
+    let maxHp = baseStats.maxHp;
+    let critChance = baseStats.critChance || 0;
 
-    if (player.equipment.weapon) {
-      attack += player.equipment.weapon.stats?.attack || 0;
-      defense += player.equipment.weapon.stats?.defense || 0;
-      maxHp += player.equipment.weapon.stats?.maxHp || 0;
-    }
-    if (player.equipment.armor) {
-      attack += player.equipment.armor.stats?.attack || 0;
-      defense += player.equipment.armor.stats?.defense || 0;
-      maxHp += player.equipment.armor.stats?.maxHp || 0;
-    }
-    if (player.equipment.accessory) {
-      attack += player.equipment.accessory.stats?.attack || 0;
-      defense += player.equipment.accessory.stats?.defense || 0;
-      maxHp += player.equipment.accessory.stats?.maxHp || 0;
-    }
-
-    const effects = player.skills?.combatEffects;
     if (effects) {
       if (effects.attackMod) {
         attack = Math.floor(attack * (1 + effects.attackMod));
@@ -49,16 +72,250 @@ class CombatSystem {
       }
     }
 
-    return { attack, defense, maxHp };
+    return { attack, defense, maxHp, critChance };
+  }
+
+  getEquipmentsSpecialEffects() {
+    const effects = [];
+    const equipment = this.gameState.player.equipment;
+    
+    if (equipment.weapon) {
+      effects.push(...getEquipmentSpecialEffects(equipment.weapon));
+    }
+    if (equipment.armor) {
+      effects.push(...getEquipmentSpecialEffects(equipment.armor));
+    }
+    if (equipment.accessory) {
+      effects.push(...getEquipmentSpecialEffects(equipment.accessory));
+    }
+    
+    return effects;
+  }
+
+  getEquipmentDamageReduction() {
+    const effects = this.getEquipmentsSpecialEffects();
+    let reduction = 0;
+    
+    effects.forEach(effect => {
+      if (effect.type === 'eternity' || effect.type === 'divine_blessing') {
+        reduction += effect.damageReduction || 0;
+      }
+    });
+    
+    return Math.min(0.5, reduction);
+  }
+
+  getEquipmentDamageBoost() {
+    const effects = this.getEquipmentsSpecialEffects();
+    let boost = 0;
+    
+    effects.forEach(effect => {
+      if (effect.type === 'divine_blessing') {
+        boost += effect.damageBoost || 0;
+      }
+      if (effect.type === 'wolf_pack') {
+        const kills = this.gameState.combat.killsThisCombat || 0;
+        const stacks = Math.min(5, kills);
+        boost += stacks * (effect.damageMultiplier || 0.1);
+      }
+      if (effect.type === 'blood_moon') {
+        const hpPercent = this.gameState.player.stats.currentHp / this.gameState.player.stats.maxHp;
+        const maxBoost = effect.damageBoost || 0.3;
+        boost += (1 - hpPercent) * maxBoost;
+      }
+    });
+    
+    return boost;
+  }
+
+  applyEquipmentOnHitEffects(damage, targetIsEnemy = true) {
+    if (!targetIsEnemy) return { damage, extraEffects: [] };
+    
+    const effects = this.getEquipmentsSpecialEffects();
+    const extraEffects = [];
+    let finalDamage = damage;
+    let lifestealAmount = 0;
+
+    effects.forEach(effect => {
+      const roll = Math.random();
+      
+      switch (effect.type) {
+        case 'burn':
+        case 'curse':
+          if (roll < (effect.chance || 0.1)) {
+            extraEffects.push({
+              type: 'dot',
+              name: effect.affixName,
+              damagePercent: effect.damagePercent,
+              turns: effect.turns,
+              dotType: effect.type
+            });
+          }
+          break;
+          
+        case 'freeze':
+          if (roll < (effect.chance || 0.1)) {
+            extraEffects.push({
+              type: 'stun',
+              name: effect.affixName,
+              turns: effect.turns
+            });
+          }
+          break;
+          
+        case 'chain_lightning':
+        case 'dragon_breath':
+          if (roll < (effect.chance || 0.1)) {
+            const extraDamage = Math.floor(this.gameState.player.stats.attack * (effect.damagePercent || 0.5));
+            finalDamage += extraDamage;
+            extraEffects.push({
+              type: 'extra_damage',
+              name: effect.affixName,
+              damage: extraDamage
+            });
+          }
+          break;
+          
+        case 'destruction':
+          if (roll < (effect.chance || 0.05)) {
+            finalDamage = Math.floor(damage * (effect.damageMultiplier || 3));
+            extraEffects.push({
+              type: 'multiplier',
+              name: effect.affixName,
+              multiplier: effect.damageMultiplier
+            });
+          }
+          break;
+          
+        case 'execute':
+          if (this.gameState.combat.enemy.currentHp / this.gameState.combat.enemy.maxHp < (effect.threshold || 0.2)) {
+            finalDamage = Math.floor(damage * (effect.damageMultiplier || 2));
+            extraEffects.push({
+              type: 'execute',
+              name: effect.affixName,
+              multiplier: effect.damageMultiplier
+            });
+          }
+          break;
+          
+        case 'lifesteal':
+        case 'vampiric':
+          lifestealAmount += Math.floor(damage * (effect.percent || 0.1));
+          break;
+          
+        case 'double_strike':
+          if (roll < (effect.chance || 0.05)) {
+            extraEffects.push({
+              type: 'double_strike',
+              name: effect.affixName
+            });
+          }
+          break;
+          
+        case 'holy_shield':
+          if (roll < (effect.chance || 0.1)) {
+            const maxHp = CharacterSystem.getPlayerTotalStats(this.gameState).maxHp;
+            const shieldAmount = Math.floor(maxHp * (effect.shieldPercent || 0.1));
+            extraEffects.push({
+              type: 'shield',
+              name: effect.affixName,
+              amount: shieldAmount
+            });
+          }
+          break;
+      }
+    });
+
+    if (lifestealAmount > 0) {
+      const maxHp = CharacterSystem.getPlayerTotalStats(this.gameState).maxHp;
+      const currentHp = this.gameState.player.stats.currentHp;
+      const actualHeal = Math.min(lifestealAmount, maxHp - currentHp);
+      this.gameState.player.stats.currentHp += actualHeal;
+      extraEffects.push({
+        type: 'lifesteal',
+        amount: actualHeal
+      });
+    }
+
+    return { damage: finalDamage, extraEffects };
+  }
+
+  applyEquipmentOnTurnStartEffects() {
+    const effects = this.getEquipmentsSpecialEffects();
+    const messages = [];
+
+    effects.forEach(effect => {
+      if (effect.type === 'celestial_blessing') {
+        const maxHp = CharacterSystem.getPlayerTotalStats(this.gameState).maxHp;
+        const healAmount = Math.floor(maxHp * (effect.healPercent || 0.05));
+        const currentHp = this.gameState.player.stats.currentHp;
+        const actualHeal = Math.min(healAmount, maxHp - currentHp);
+        if (actualHeal > 0) {
+          this.gameState.player.stats.currentHp += actualHeal;
+          messages.push(`✨ ${effect.affixName}：恢复了 ${actualHeal} 点生命值！`);
+        }
+      }
+    });
+
+    return messages;
+  }
+
+  checkEquipmentRevive() {
+    const effects = this.getEquipmentsSpecialEffects();
+    
+    for (const effect of effects) {
+      if (effect.type === 'phoenix_revive') {
+        if (!effect.usedThisCombat && Math.random() < (effect.chance || 0.03)) {
+          const maxHp = CharacterSystem.getPlayerTotalStats(this.gameState).maxHp;
+          const healAmount = Math.floor(maxHp * (effect.healPercent || 0.5));
+          this.gameState.player.stats.currentHp = healAmount;
+          effect.usedThisCombat = true;
+          return { success: true, amount: healAmount, name: effect.affixName };
+        }
+      }
+      
+      if (effect.type === 'guardian_angel') {
+        if (!effect.usedThisCombat && effect.reviveOnce) {
+          const maxHp = CharacterSystem.getPlayerTotalStats(this.gameState).maxHp;
+          const healAmount = Math.floor(maxHp * (effect.healPercent || 0.3));
+          this.gameState.player.stats.currentHp = healAmount;
+          effect.usedThisCombat = true;
+          return { success: true, amount: healAmount, name: effect.affixName };
+        }
+      }
+    }
+    
+    return { success: false };
+  }
+
+  checkEquipmentExtraTurn() {
+    const effects = this.getEquipmentsSpecialEffects();
+    
+    for (const effect of effects) {
+      if (effect.type === 'time_warp') {
+        if (Math.random() < (effect.extraTurnChance || 0.15)) {
+          return { success: true, name: effect.affixName };
+        }
+      }
+    }
+    
+    return { success: false };
   }
 
   calculateDamage(attacker, defender, isPlayerAttacker, overrideMultiplier = 1, forceCrit = false) {
     let attackValue = WeatherSystem.applyCombatAttackMods(this.gameState, attacker.attack, isPlayerAttacker);
     let defenseValue = WeatherSystem.applyCombatDefenseMods(this.gameState, defender.defense, !isPlayerAttacker);
-    attackValue = Math.floor(attackValue * overrideMultiplier);
+    
+    const damageBoost = isPlayerAttacker ? this.getEquipmentDamageBoost() : 0;
+    attackValue = Math.floor(attackValue * (1 + damageBoost) * overrideMultiplier);
+    
+    const damageReduction = !isPlayerAttacker ? this.getEquipmentDamageReduction() : 0;
+    defenseValue = Math.floor(defenseValue * (1 + damageReduction));
+    
     const baseDamage = Math.max(1, attackValue - defenseValue);
     const variance = Math.floor(Math.random() * 5) - 2;
-    const baseCritChance = 0.1;
+    
+    const baseCritChance = isPlayerAttacker ? (attacker.critChance || 0.1) : 0.1;
     const adjustedCritChance = forceCrit ? 1.0 : WeatherSystem.applyCritChanceMod(this.gameState, baseCritChance);
     const critRoll = Math.random();
     const isCrit = critRoll < adjustedCritChance;
@@ -92,24 +349,92 @@ class CombatSystem {
 
     const playerStats = this.getPlayerTotalStats();
     const enemy = this.gameState.combat.enemy;
-    const attacker = { attack: playerStats.attack };
+    const attacker = { attack: playerStats.attack, critChance: playerStats.critChance };
     const defender = { defense: enemy.defense };
 
     const { damage, isCrit } = this.calculateDamage(attacker, defender, true);
-    enemy.currentHp -= damage;
+    
+    const equipResult = this.applyEquipmentOnHitEffects(damage, true);
+    let finalDamage = equipResult.damage;
+    
+    enemy.currentHp -= finalDamage;
 
     const critText = isCrit ? '【暴击！】' : '';
-    this.addCombatLog(`⚔️ 你对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
+    this.addCombatLog(`⚔️ 你对 ${enemy.name} 造成了 ${critText}${finalDamage} 点伤害！`);
+    
+    equipResult.extraEffects.forEach(effect => {
+      switch (effect.type) {
+        case 'dot':
+          if (!this.gameState.combat.enemyDots) this.gameState.combat.enemyDots = [];
+          this.gameState.combat.enemyDots.push({
+            type: effect.dotType,
+            name: effect.name,
+            damagePercent: effect.damagePercent,
+            turns: effect.turns
+          });
+          const dotDamage = Math.floor(this.getPlayerTotalStats().attack * effect.damagePercent);
+          this.addCombatLog(`🔥 ${effect.name}：敌人陷入${effect.dotType === 'burn' ? '燃烧' : '诅咒'}状态，${effect.turns}回合每回合受到${dotDamage}点伤害！`);
+          break;
+        case 'stun':
+          this.gameState.combat.enemyStunned = true;
+          this.addCombatLog(`❄️ ${effect.name}：敌人被冻结${effect.turns}回合！`);
+          break;
+        case 'extra_damage':
+          this.addCombatLog(`⚡ ${effect.name}：额外造成 ${effect.damage} 点伤害！`);
+          break;
+        case 'multiplier':
+          this.addCombatLog(`💥 ${effect.name}：造成 ${effect.multiplier} 倍毁灭伤害！`);
+          break;
+        case 'execute':
+          this.addCombatLog(`💀 ${effect.name}：处决！敌人血量低于阈值，伤害翻倍！`);
+          break;
+        case 'lifesteal':
+          if (effect.amount > 0) {
+            this.addCombatLog(`💚 吸血恢复了 ${effect.amount} 点生命值！`);
+          }
+          break;
+        case 'shield':
+          if (!this.gameState.player.skills.combatEffects) {
+            this.gameState.player.skills.combatEffects = SkillSystem.createSkillState().combatEffects;
+          }
+          this.gameState.player.skills.combatEffects.shield += effect.amount;
+          this.addCombatLog(`🛡️ ${effect.name}：生成了 ${effect.amount} 点护盾！`);
+          break;
+        case 'double_strike':
+          this.addCombatLog(`⚡ ${effect.name}：触发双击！`);
+          break;
+      }
+    });
 
     this.applyDotDamage();
+    this.applyEnemyDotDamage();
 
     if (enemy.currentHp <= 0) {
       return this.enemyDefeated();
     }
 
+    const hasDoubleStrike = equipResult.extraEffects.some(e => e.type === 'double_strike');
+    if (hasDoubleStrike && enemy.currentHp > 0) {
+      const { damage: secondDamage, isCrit: secondCrit } = this.calculateDamage(attacker, defender, true);
+      enemy.currentHp -= secondDamage;
+      const secondCritText = secondCrit ? '【暴击！】' : '';
+      this.addCombatLog(`⚡ 第二击！对 ${enemy.name} 造成了 ${secondCritText}${secondDamage} 点伤害！`);
+      
+      if (enemy.currentHp <= 0) {
+        return this.enemyDefeated();
+      }
+    }
+
     SkillSystem.tickCombatEffects(this.gameState);
-    this.gameState.combat.playerTurn = false;
-    return { type: 'playerAttack', damage, isCrit, enemyHp: enemy.currentHp };
+    
+    const extraTurn = this.checkEquipmentExtraTurn();
+    if (extraTurn.success) {
+      this.addCombatLog(`⏰ ${extraTurn.name}：获得额外行动回合！`);
+    } else {
+      this.gameState.combat.playerTurn = false;
+    }
+    
+    return { type: 'playerAttack', damage: finalDamage, isCrit, enemyHp: enemy.currentHp };
   }
 
   playerUseSkill(skillId) {
@@ -131,49 +456,89 @@ class CombatSystem {
     let logs = [];
     logs.push(`${skill.icon} 施放【${skill.name}】！消耗 ${skill.mpCost} MP`);
 
+    const attacker = { attack: playerStats.attack, critChance: playerStats.critChance };
+    const defender = { defense: enemy.defense };
+
+    const applySkillDamageWithAffixes = (damage, isCrit) => {
+      const equipResult = this.applyEquipmentOnHitEffects(damage, true);
+      let finalDamage = equipResult.damage;
+      enemy.currentHp -= finalDamage;
+      
+      const critText = isCrit ? '【暴击！】' : '';
+      logs.push(`💥 对 ${enemy.name} 造成了 ${critText}${finalDamage} 点伤害！`);
+      
+      equipResult.extraEffects.forEach(effect => {
+        switch (effect.type) {
+          case 'dot':
+            if (!this.gameState.combat.enemyDots) this.gameState.combat.enemyDots = [];
+            this.gameState.combat.enemyDots.push({
+              type: effect.dotType,
+              name: effect.name,
+              damagePercent: effect.damagePercent,
+              turns: effect.turns
+            });
+            const dotDamage = Math.floor(this.getPlayerTotalStats().attack * effect.damagePercent);
+            logs.push(`🔥 ${effect.name}：敌人陷入${effect.dotType === 'burn' ? '燃烧' : '诅咒'}状态，${effect.turns}回合每回合受到${dotDamage}点伤害！`);
+            break;
+          case 'stun':
+            this.gameState.combat.enemyStunned = true;
+            logs.push(`❄️ ${effect.name}：敌人被冻结${effect.turns}回合！`);
+            break;
+          case 'extra_damage':
+            logs.push(`⚡ ${effect.name}：额外造成 ${effect.damage} 点伤害！`);
+            break;
+          case 'multiplier':
+            logs.push(`💥 ${effect.name}：造成 ${effect.multiplier} 倍毁灭伤害！`);
+            break;
+          case 'execute':
+            logs.push(`💀 ${effect.name}：处决！敌人血量低于阈值，伤害翻倍！`);
+            break;
+          case 'lifesteal':
+            if (effect.amount > 0) {
+              totalHeal += effect.amount;
+              logs.push(`💚 吸血恢复了 ${effect.amount} 点生命值！`);
+            }
+            break;
+          case 'shield':
+            if (!this.gameState.player.skills.combatEffects) {
+              this.gameState.player.skills.combatEffects = SkillSystem.createSkillState().combatEffects;
+            }
+            this.gameState.player.skills.combatEffects.shield += effect.amount;
+            logs.push(`🛡️ ${effect.name}：生成了 ${effect.amount} 点护盾！`);
+            break;
+        }
+      });
+      
+      return finalDamage;
+    };
+
     switch (effect.type) {
       case 'damage': {
-        const attacker = { attack: playerStats.attack };
-        const defender = { defense: enemy.defense };
         const { damage, isCrit } = this.calculateDamage(attacker, defender, true, effect.multiplier);
-        enemy.currentHp -= damage;
-        totalDamage = damage;
-        const critText = isCrit ? '【暴击！】' : '';
-        logs.push(`💥 对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
+        totalDamage = applySkillDamageWithAffixes(damage, isCrit);
         break;
       }
       case 'damage_crit': {
-        const attacker = { attack: playerStats.attack };
-        const defender = { defense: enemy.defense };
-        const { damage } = this.calculateDamage(attacker, defender, true, effect.multiplier, true);
-        enemy.currentHp -= damage;
-        totalDamage = damage;
-        logs.push(`💥 对 ${enemy.name} 造成了 【必暴击！】${damage} 点伤害！`);
+        const { damage, isCrit } = this.calculateDamage(attacker, defender, true, effect.multiplier, true);
+        totalDamage = applySkillDamageWithAffixes(damage, isCrit);
+        logs.push(`💥 对 ${enemy.name} 造成了 【必暴击！】${totalDamage} 点伤害！`);
         break;
       }
       case 'damage_lifesteal': {
-        const attacker = { attack: playerStats.attack };
-        const defender = { defense: enemy.defense };
         const { damage, isCrit } = this.calculateDamage(attacker, defender, true, effect.multiplier);
-        enemy.currentHp -= damage;
-        totalDamage = damage;
-        const heal = Math.floor(damage * effect.lifestealPercent);
+        totalDamage = applySkillDamageWithAffixes(damage, isCrit);
+        const heal = Math.floor(totalDamage * effect.lifestealPercent);
         const actualHeal = Math.min(heal, playerStats.maxHp - this.gameState.player.stats.currentHp);
         this.gameState.player.stats.currentHp += actualHeal;
-        totalHeal = actualHeal;
-        const critText = isCrit ? '【暴击！】' : '';
-        logs.push(`💥 对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
-        logs.push(`💚 吸血恢复了 ${actualHeal} 点生命值！`);
+        totalHeal += actualHeal;
+        if (actualHeal > 0) {
+          logs.push(`💚 技能吸血恢复了 ${actualHeal} 点生命值！`);
+        }
         break;
       }
       case 'damage_stun': {
-        const attacker = { attack: playerStats.attack };
-        const defender = { defense: enemy.defense };
         const { damage, isCrit } = this.calculateDamage(attacker, defender, true, effect.multiplier);
-        enemy.currentHp -= damage;
-        totalDamage = damage;
-        const critText = isCrit ? '【暴击！】' : '';
-        logs.push(`💥 对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
+        totalDamage = applySkillDamageWithAffixes(damage, isCrit);
         if (Math.random() < effect.stunChance) {
           this.gameState.combat.enemyStunned = true;
           logs.push(`⚡ ${enemy.name} 被眩晕了！下回合无法行动！`);
@@ -181,16 +546,11 @@ class CombatSystem {
         break;
       }
       case 'damage_dot': {
-        const attacker = { attack: playerStats.attack };
-        const defender = { defense: enemy.defense };
         const { damage, isCrit } = this.calculateDamage(attacker, defender, true, effect.multiplier);
-        enemy.currentHp -= damage;
-        totalDamage = damage;
-        const critText = isCrit ? '【暴击！】' : '';
-        logs.push(`💥 对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
+        totalDamage = applySkillDamageWithAffixes(damage, isCrit);
         const playerEffects = this.gameState.player.skills.combatEffects;
         playerEffects.dotTurns = effect.dotTurns;
-        playerEffects.dotDamage = Math.floor(damage * effect.dotPercent);
+        playerEffects.dotDamage = Math.floor(totalDamage * effect.dotPercent);
         logs.push(`☠️ 敌人中毒！接下来 ${effect.dotTurns} 回合每回合额外受到 ${playerEffects.dotDamage} 点伤害！`);
         break;
       }
@@ -198,20 +558,15 @@ class CombatSystem {
         const hpPercent = enemy.currentHp / enemy.maxHp;
         const useExecute = hpPercent < effect.executeHpPercent;
         const multiplier = useExecute ? effect.executeMultiplier : effect.multiplier;
-        const attacker = { attack: playerStats.attack };
-        const defender = { defense: enemy.defense };
         const { damage } = this.calculateDamage(attacker, defender, true, multiplier, useExecute);
-        enemy.currentHp -= damage;
-        totalDamage = damage;
         if (useExecute) {
-          logs.push(`💀【处决！】敌人生命值低于 ${Math.floor(effect.executeHpPercent * 100)}%，造成毁灭性 ${damage} 点伤害！`);
-        } else {
-          logs.push(`💥 对 ${enemy.name} 造成了 ${damage} 点伤害！`);
+          logs.push(`💀【处决！】敌人生命值低于 ${Math.floor(effect.executeHpPercent * 100)}%！`);
         }
-        const heal = Math.floor(damage * effect.lifestealPercent);
+        totalDamage = applySkillDamageWithAffixes(damage, useExecute);
+        const heal = Math.floor(totalDamage * effect.lifestealPercent);
         const actualHeal = Math.min(heal, playerStats.maxHp - this.gameState.player.stats.currentHp);
         this.gameState.player.stats.currentHp += actualHeal;
-        totalHeal = actualHeal;
+        totalHeal += actualHeal;
         if (actualHeal > 0) {
           logs.push(`💚 吸血恢复了 ${actualHeal} 点生命值！`);
         }
@@ -220,18 +575,26 @@ class CombatSystem {
       case 'multi_strike': {
         for (let i = 0; i < effect.hits; i++) {
           const isFinal = i === effect.hits - 1;
-          const attacker = { attack: playerStats.attack };
-          const defender = { defense: enemy.defense };
           const { damage, isCrit } = this.calculateDamage(
             attacker, defender, true, effect.multiplier,
             isFinal && effect.finalCrit
           );
-          enemy.currentHp -= damage;
-          totalDamage += damage;
+          const equipResult = this.applyEquipmentOnHitEffects(damage, true);
+          let finalDamage = equipResult.damage;
+          enemy.currentHp -= finalDamage;
+          totalDamage += finalDamage;
           const critText = isCrit ? '【暴击！】' : '';
-          logs.push(`👥 第 ${i + 1} 击！对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
+          logs.push(`👥 第 ${i + 1} 击！对 ${enemy.name} 造成了 ${critText}${finalDamage} 点伤害！`);
+          
+          equipResult.extraEffects.forEach(effect => {
+            if (effect.type === 'lifesteal' && effect.amount > 0) {
+              totalHeal += effect.amount;
+              logs.push(`💚 吸血恢复了 ${effect.amount} 点生命值！`);
+            }
+          });
+          
           if (isFinal && effect.lifestealPercent) {
-            const heal = Math.floor(damage * effect.lifestealPercent);
+            const heal = Math.floor(finalDamage * effect.lifestealPercent);
             const actualHeal = Math.min(heal, playerStats.maxHp - this.gameState.player.stats.currentHp);
             this.gameState.player.stats.currentHp += actualHeal;
             totalHeal += actualHeal;
@@ -259,18 +622,14 @@ class CombatSystem {
         break;
       }
       case 'ultimate': {
-        const attacker = { attack: playerStats.attack };
-        const defender = { defense: enemy.defense };
         const { damage, isCrit } = this.calculateDamage(attacker, defender, true, effect.multiplier);
-        enemy.currentHp -= damage;
-        totalDamage = damage;
-        const critText = isCrit ? '【暴击！】' : '';
-        logs.push(`💥 终极技能！对 ${enemy.name} 造成了 ${critText}${damage} 点伤害！`);
+        totalDamage = applySkillDamageWithAffixes(damage, isCrit);
+        logs.push(`💥 终极技能！对 ${enemy.name} 造成了 ${totalDamage} 点伤害！`);
         if (effect.lifestealPercent) {
-          const heal = Math.floor(damage * effect.lifestealPercent);
+          const heal = Math.floor(totalDamage * effect.lifestealPercent);
           const actualHeal = Math.min(heal, playerStats.maxHp - this.gameState.player.stats.currentHp);
           this.gameState.player.stats.currentHp += actualHeal;
-          totalHeal = actualHeal;
+          totalHeal += actualHeal;
           if (actualHeal > 0) logs.push(`💚 吸血恢复了 ${actualHeal} 点生命值！`);
         }
         if (effect.shieldPercent) {
@@ -306,13 +665,21 @@ class CombatSystem {
     logs.forEach(l => this.addCombatLog(l));
 
     this.applyDotDamage();
+    this.applyEnemyDotDamage();
 
     if (enemy.currentHp <= 0) {
       return this.enemyDefeated();
     }
 
     SkillSystem.tickCombatEffects(this.gameState);
-    this.gameState.combat.playerTurn = false;
+    
+    const extraTurn = this.checkEquipmentExtraTurn();
+    if (extraTurn.success) {
+      this.addCombatLog(`⏰ ${extraTurn.name}：获得额外行动回合！`);
+    } else {
+      this.gameState.combat.playerTurn = false;
+    }
+    
     return {
       type: 'skillUsed',
       skill: skill,
@@ -401,9 +768,18 @@ class CombatSystem {
     }
 
     if (this.gameState.player.stats.currentHp <= 0) {
-      this.gameState.player.stats.currentHp = 0;
-      return this.playerDefeated();
+      const reviveResult = this.checkEquipmentRevive();
+      if (reviveResult.success) {
+        this.addCombatLog(`🌟 ${reviveResult.name}：你被复活了！恢复了 ${reviveResult.amount} 点生命值！`);
+        this.gameState.player.stats.currentHp = reviveResult.amount;
+      } else {
+        this.gameState.player.stats.currentHp = 0;
+        return this.playerDefeated();
+      }
     }
+
+    const turnStartEffects = this.applyEquipmentOnTurnStartEffects();
+    turnStartEffects.forEach(msg => this.addCombatLog(msg));
 
     this.gameState.combat.playerTurn = true;
     return { type: 'enemyAttack', damage, isCrit, playerHp: this.gameState.player.stats.currentHp };
@@ -419,6 +795,7 @@ class CombatSystem {
     this.gameState.player.stats.exp += expGain;
     this.gameState.score += scoreGain;
     this.gameState.kills++;
+    this.gameState.combat.killsThisCombat = (this.gameState.combat.killsThisCombat || 0) + 1;
 
     if (!this.gameState.comboKills) this.gameState.comboKills = 0;
     this.gameState.comboKills++;

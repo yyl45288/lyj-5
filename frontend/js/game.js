@@ -295,16 +295,22 @@ class Game {
             const canAfford = this.gameState.player.gold >= item.buyPrice;
             const rarityClass = `rarity-${item.rarity}`;
             const disabledClass = canAfford ? '' : 'disabled';
+            const hasAffixes = item.affixes && 
+                (item.affixes.prefixes?.length > 0 || 
+                 item.affixes.suffixes?.length > 0 || 
+                 item.affixes.specials?.length > 0);
+            const affixIndicator = hasAffixes ? '✨' : '';
             
             html += `
                 <div class="merchant-item ${rarityClass} ${disabledClass}" data-index="${index}" data-action="view-buy">
-                    <div class="merchant-item-icon">${item.icon}</div>
+                    <div class="merchant-item-icon">${item.icon}${affixIndicator}</div>
                     <div class="merchant-item-name">${item.name}</div>
                     <div class="merchant-item-price">💰 ${item.buyPrice}</div>
                     <div class="merchant-item-stats">
                         ${item.stats?.attack ? `<span>⚔️+${item.stats.attack}</span>` : ''}
                         ${item.stats?.defense ? `<span>🛡️+${item.stats.defense}</span>` : ''}
                         ${item.stats?.maxHp ? `<span>❤️+${item.stats.maxHp}</span>` : ''}
+                        ${item.stats?.critChance ? `<span>🎯+${Math.round(item.stats.critChance * 100)}%</span>` : ''}
                     </div>
                     <div class="item-view-hint">点击查看详情</div>
                 </div>
@@ -352,16 +358,22 @@ class Game {
         inventory.forEach((item, index) => {
             const sellPrice = calculateItemSellPrice(item, this.gameState.dungeon.floor);
             const rarityClass = `rarity-${item.rarity}`;
+            const hasAffixes = item.affixes && 
+                (item.affixes.prefixes?.length > 0 || 
+                 item.affixes.suffixes?.length > 0 || 
+                 item.affixes.specials?.length > 0);
+            const affixIndicator = hasAffixes ? '✨' : '';
             
             html += `
                 <div class="merchant-item ${rarityClass}" data-index="${index}" data-action="view-sell">
-                    <div class="merchant-item-icon">${item.icon}</div>
+                    <div class="merchant-item-icon">${item.icon}${affixIndicator}</div>
                     <div class="merchant-item-name">${item.name}</div>
                     <div class="merchant-item-price" style="color: #2ECC71;">💰 ${sellPrice}</div>
                     <div class="merchant-item-stats">
                         ${item.stats?.attack ? `<span>⚔️+${item.stats.attack}</span>` : ''}
                         ${item.stats?.defense ? `<span>🛡️+${item.stats.defense}</span>` : ''}
                         ${item.stats?.maxHp ? `<span>❤️+${item.stats.maxHp}</span>` : ''}
+                        ${item.stats?.critChance ? `<span>🎯+${Math.round(item.stats.critChance * 100)}%</span>` : ''}
                     </div>
                     <div class="item-view-hint">点击查看详情</div>
                 </div>
@@ -609,20 +621,35 @@ class Game {
 
     equipItem(itemId) {
         if (!this.gameState) return;
-        CharacterSystem.equipItem(this.gameState, itemId);
+        const result = CharacterSystem.equipItem(this.gameState, itemId);
+        if (result && !result.success) {
+            this.showNotification(`❌ ${result.message}`);
+        }
         this.render();
         this.closeItemModal();
     }
 
     unequipItem(slot) {
         if (!this.gameState) return;
-        CharacterSystem.unequipItem(this.gameState, slot);
+        
+        if (this.gameState.combat && this.gameState.combat.active) {
+            this.showNotification('❌ 战斗中无法卸下装备！');
+            return;
+        }
+        
+        const result = CharacterSystem.unequipItem(this.gameState, slot);
+        if (result && !result.success) {
+            this.showNotification(`❌ ${result.message}`);
+        }
         this.render();
     }
 
     discardItem(itemId) {
         if (!this.gameState) return;
-        CharacterSystem.discardItem(this.gameState, itemId);
+        const result = CharacterSystem.discardItem(this.gameState, itemId);
+        if (result && !result.success) {
+            this.showNotification(`❌ ${result.message}`);
+        }
         this.render();
         this.closeItemModal();
     }
@@ -640,18 +667,54 @@ class Game {
         const statsContainer = document.getElementById('modal-item-stats');
         statsContainer.innerHTML = '';
         
+        const slotNames = { weapon: '武器', armor: '护甲', accessory: '饰品' };
+        const slotName = item.slotName || slotNames[item.type] || item.type;
+        statsContainer.innerHTML += `<div class="modal-stat"><span>📍 穿戴部位</span><span>${slotName}</span></div>`;
+        
+        if (item.baseName && item.baseName !== item.name) {
+            statsContainer.innerHTML += `<div class="modal-stat"><span>📦 基础装备</span><span>${item.baseName}</span></div>`;
+        }
+        
         if (item.stats && item.stats.attack) {
-            statsContainer.innerHTML += `<div class="modal-stat"><span>⚔️ 攻击力</span><span>+${item.stats.attack}</span></div>`;
+            statsContainer.innerHTML += `<div class="modal-stat"><span>⚔️ 攻击力</span><span style="color: #2ECC71;">+${item.stats.attack}</span></div>`;
         }
         if (item.stats && item.stats.defense) {
-            statsContainer.innerHTML += `<div class="modal-stat"><span>🛡️ 防御力</span><span>+${item.stats.defense}</span></div>`;
+            statsContainer.innerHTML += `<div class="modal-stat"><span>🛡️ 防御力</span><span style="color: #2ECC71;">+${item.stats.defense}</span></div>`;
         }
         if (item.stats && item.stats.maxHp) {
-            statsContainer.innerHTML += `<div class="modal-stat"><span>❤️ 生命值</span><span>+${item.stats.maxHp}</span></div>`;
+            statsContainer.innerHTML += `<div class="modal-stat"><span>❤️ 生命值</span><span style="color: #2ECC71;">+${item.stats.maxHp}</span></div>`;
+        }
+        if (item.stats && item.stats.critChance) {
+            statsContainer.innerHTML += `<div class="modal-stat"><span>🎯 暴击率</span><span style="color: #F39C12;">+${Math.round(item.stats.critChance * 100)}%</span></div>`;
+        }
+
+        if (item.affixes && (item.affixes.prefixes?.length > 0 || item.affixes.suffixes?.length > 0 || item.affixes.specials?.length > 0)) {
+            statsContainer.innerHTML += `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">`;
+            statsContainer.innerHTML += `<div style="color: var(--accent-gold); font-weight: bold; margin-bottom: 8px;">✨ 词缀属性</div>`;
+            
+            const allAffixes = [
+                ...(item.affixes.prefixes || []),
+                ...(item.affixes.suffixes || []),
+                ...(item.affixes.specials || [])
+            ];
+            
+            allAffixes.forEach(affix => {
+                const affixColor = affix.minRarity === 'legendary' ? '#F1C40F' : 
+                                  affix.minRarity === 'epic' ? '#9B59B6' :
+                                  affix.minRarity === 'rare' ? '#3498DB' :
+                                  affix.minRarity === 'uncommon' ? '#2ECC71' : '#95A5A6';
+                statsContainer.innerHTML += `<div style="color: ${affixColor}; margin-bottom: 6px;">${affix.description}</div>`;
+            });
+            
+            statsContainer.innerHTML += `</div>`;
         }
 
         if (item.description) {
             statsContainer.innerHTML += `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary); font-size: 0.9rem;">${item.description}</div>`;
+        }
+
+        if (this.gameState.combat && this.gameState.combat.active && !CharacterSystem.isUsableItem(item)) {
+            statsContainer.innerHTML += `<div style="margin-top: 10px; padding: 8px; background: rgba(231, 76, 60, 0.2); border-radius: 4px; color: #E74C3C; font-size: 0.9rem;">⚠️ 战斗中无法更换装备</div>`;
         }
 
         const equipBtn = document.getElementById('equip-btn');
@@ -663,6 +726,16 @@ class Game {
         } else {
             equipBtn.classList.remove('hidden');
             useBtn.classList.add('hidden');
+            
+            if (this.gameState.combat && this.gameState.combat.active) {
+                equipBtn.disabled = true;
+                equipBtn.style.opacity = '0.5';
+                equipBtn.style.cursor = 'not-allowed';
+            } else {
+                equipBtn.disabled = false;
+                equipBtn.style.opacity = '1';
+                equipBtn.style.cursor = 'pointer';
+            }
         }
 
         document.getElementById('item-modal').classList.remove('hidden');
@@ -823,6 +896,12 @@ class Game {
 
         document.getElementById('player-attack').innerHTML = attackText;
         document.getElementById('player-defense').innerHTML = defenseText;
+        
+        const critChanceElement = document.getElementById('player-crit-chance');
+        if (critChanceElement && totalStats.critChance !== undefined) {
+            const critPercent = Math.round(totalStats.critChance * 100);
+            critChanceElement.innerHTML = `${critPercent}%`;
+        }
 
         this.renderEquipment();
     }
@@ -876,22 +955,46 @@ class Game {
 
     renderEquipment() {
         const equipment = this.gameState.player.equipment;
+        const slotNames = { weapon: '武器', armor: '护甲', accessory: '饰品' };
         
         ['weapon', 'armor', 'accessory'].forEach(slot => {
             const slotElement = document.querySelector(`[data-slot="${slot}"]`);
             const contentElement = document.getElementById(`equip-${slot}`);
             
             if (equipment[slot]) {
+                const item = equipment[slot];
                 slotElement.classList.add('equipped');
+                
+                const rarityClass = `rarity-${item.rarity}`;
+                const hasAffixes = item.affixes && 
+                    (item.affixes.prefixes?.length > 0 || 
+                     item.affixes.suffixes?.length > 0 || 
+                     item.affixes.specials?.length > 0);
+                const affixIndicator = hasAffixes ? '✨' : '';
+                
+                let tooltip = `${item.name}\n`;
+                tooltip += `部位: ${slotNames[slot]}\n`;
+                if (item.stats) {
+                    if (item.stats.attack) tooltip += `攻击+${item.stats.attack}\n`;
+                    if (item.stats.defense) tooltip += `防御+${item.stats.defense}\n`;
+                    if (item.stats.maxHp) tooltip += `生命+${item.stats.maxHp}\n`;
+                    if (item.stats.critChance) tooltip += `暴击+${Math.round(item.stats.critChance * 100)}%\n`;
+                }
+                tooltip = tooltip.trim();
+                
                 contentElement.innerHTML = `
-                    <span title="${equipment[slot].name}" style="cursor: pointer;">
-                        ${equipment[slot].icon}
+                    <span title="${tooltip}" style="cursor: pointer;" class="${rarityClass}">
+                        ${item.icon}${affixIndicator}
                     </span>
                 `;
                 contentElement.onclick = () => this.unequipItem(slot);
             } else {
                 slotElement.classList.remove('equipped');
-                contentElement.textContent = '-';
+                contentElement.innerHTML = `
+                    <span title="${slotNames[slot]}栏位（空）" style="cursor: default; opacity: 0.5;">
+                        -
+                    </span>
+                `;
                 contentElement.onclick = null;
             }
         });
@@ -1094,11 +1197,16 @@ class Game {
         for (let i = 0; i < maxSlots; i++) {
             if (i < inventory.length) {
                 const item = inventory[i];
+                const hasAffixes = item.affixes && 
+                    (item.affixes.prefixes?.length > 0 || 
+                     item.affixes.suffixes?.length > 0 || 
+                     item.affixes.specials?.length > 0);
+                const affixIndicator = hasAffixes ? '✨' : '';
                 html += `
                     <div class="inventory-slot rarity-${item.rarity}" 
                          data-item-id="${item.id}"
                          title="${item.name}">
-                        ${item.icon}
+                        ${item.icon}${affixIndicator}
                     </div>
                 `;
             } else {

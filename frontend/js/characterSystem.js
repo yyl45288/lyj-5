@@ -52,6 +52,12 @@ class CharacterSystem {
         }
       }
     }
+    
+    if (!gameState.player.stats.critChance) {
+      gameState.player.stats.critChance = 0;
+    }
+    
+    this.ensureAllEquipmentAffixes(gameState);
 
     gameState = SkillSystem.ensureSkillCompatibility(gameState);
     
@@ -373,13 +379,20 @@ class CharacterSystem {
   }
 
   static equipItem(gameState, itemId) {
+    if (gameState.combat && gameState.combat.active) {
+      gameState.gameLog.push('⚠️ 战斗中无法更换装备！');
+      return { success: false, message: '战斗中无法更换装备！' };
+    }
+
     const player = gameState.player;
     const itemIndex = player.inventory.findIndex(item => item.id === itemId);
 
-    if (itemIndex === -1) return null;
+    if (itemIndex === -1) return { success: false, message: '物品不存在！' };
 
     const item = player.inventory[itemIndex];
     const slot = item.type;
+
+    const oldMaxHp = this.getPlayerTotalStats(gameState).maxHp;
 
     if (player.equipment[slot]) {
       player.inventory.push(player.equipment[slot]);
@@ -388,36 +401,58 @@ class CharacterSystem {
     player.equipment[slot] = item;
     player.inventory.splice(itemIndex, 1);
 
+    const newMaxHp = this.getPlayerTotalStats(gameState).maxHp;
+    if (player.stats.currentHp > newMaxHp) {
+      player.stats.currentHp = newMaxHp;
+    }
+
+    const hpChange = newMaxHp - oldMaxHp;
+    if (hpChange > 0) {
+      player.stats.currentHp = Math.min(player.stats.currentHp + hpChange, newMaxHp);
+    }
+
     gameState.gameLog.push(`⚔️ 你装备了 ${item.icon} ${item.name}！`);
 
-    return item;
+    return { success: true, item, hpChange };
   }
 
   static unequipItem(gameState, slot) {
-    const player = gameState.player;
-    if (!player.equipment[slot]) return null;
+    if (gameState.combat && gameState.combat.active) {
+      gameState.gameLog.push('⚠️ 战斗中无法卸下装备！');
+      return { success: false, message: '战斗中无法卸下装备！' };
+    }
 
+    const player = gameState.player;
+    if (!player.equipment[slot]) return { success: false, message: '该部位没有装备！' };
+
+    const oldMaxHp = this.getPlayerTotalStats(gameState).maxHp;
     const item = player.equipment[slot];
+
     player.inventory.push(item);
     player.equipment[slot] = null;
 
+    const newMaxHp = this.getPlayerTotalStats(gameState).maxHp;
+    if (player.stats.currentHp > newMaxHp) {
+      player.stats.currentHp = newMaxHp;
+    }
+
     gameState.gameLog.push(`📤 你卸下了 ${item.icon} ${item.name}！`);
 
-    return item;
+    return { success: true, item };
   }
 
   static discardItem(gameState, itemId) {
     const player = gameState.player;
     const itemIndex = player.inventory.findIndex(item => item.id === itemId);
 
-    if (itemIndex === -1) return null;
+    if (itemIndex === -1) return { success: false, message: '物品不存在！' };
 
     const item = player.inventory[itemIndex];
     player.inventory.splice(itemIndex, 1);
 
     gameState.gameLog.push(`🗑️ 你丢弃了 ${item.icon} ${item.name}！`);
 
-    return item;
+    return { success: true, item };
   }
 
   static calculateScore(gameState) {
@@ -573,24 +608,57 @@ class CharacterSystem {
     let attack = player.stats.attack;
     let defense = player.stats.defense;
     let maxHp = player.stats.maxHp;
+    let critChance = player.stats.critChance || 0;
 
-    if (player.equipment.weapon) {
-      attack += player.equipment.weapon.stats.attack || 0;
-      defense += player.equipment.weapon.stats.defense || 0;
-      maxHp += player.equipment.weapon.stats.maxHp || 0;
-    }
-    if (player.equipment.armor) {
-      attack += player.equipment.armor.stats.attack || 0;
-      defense += player.equipment.armor.stats.defense || 0;
-      maxHp += player.equipment.armor.stats.maxHp || 0;
-    }
-    if (player.equipment.accessory) {
-      attack += player.equipment.accessory.stats.attack || 0;
-      defense += player.equipment.accessory.stats.defense || 0;
-      maxHp += player.equipment.accessory.stats.maxHp || 0;
-    }
+    const addEquipmentStats = (equipment) => {
+      if (equipment && equipment.stats) {
+        attack += equipment.stats.attack || 0;
+        defense += equipment.stats.defense || 0;
+        maxHp += equipment.stats.maxHp || 0;
+        critChance += equipment.stats.critChance || 0;
+      }
+    };
 
-    return { attack, defense, maxHp };
+    addEquipmentStats(player.equipment.weapon);
+    addEquipmentStats(player.equipment.armor);
+    addEquipmentStats(player.equipment.accessory);
+
+    return { attack, defense, maxHp, critChance };
+  }
+
+  static ensureEquipmentAffixes(equipment) {
+    if (!equipment) return equipment;
+    if (!equipment.affixes) {
+      equipment.affixes = { prefixes: [], suffixes: [], specials: [] };
+    }
+    if (!equipment.slotName) {
+      const slotNames = { weapon: '武器', armor: '护甲', accessory: '饰品' };
+      equipment.slotName = slotNames[equipment.type] || equipment.type;
+    }
+    if (!equipment.baseName) {
+      equipment.baseName = equipment.name;
+    }
+    if (!equipment.baseStats) {
+      equipment.baseStats = { ...equipment.stats };
+    }
+    return equipment;
+  }
+
+  static ensureAllEquipmentAffixes(gameState) {
+    const player = gameState.player;
+    
+    player.equipment.weapon = this.ensureEquipmentAffixes(player.equipment.weapon);
+    player.equipment.armor = this.ensureEquipmentAffixes(player.equipment.armor);
+    player.equipment.accessory = this.ensureEquipmentAffixes(player.equipment.accessory);
+    
+    player.inventory = player.inventory.map(item => {
+      if (item.type === 'weapon' || item.type === 'armor' || item.type === 'accessory') {
+        return this.ensureEquipmentAffixes(item);
+      }
+      return item;
+    });
+    
+    return gameState;
   }
 
   static buyItem(gameState, merchant, itemId) {

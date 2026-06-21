@@ -374,28 +374,7 @@ class SkillSystem {
   }
 
   static getPlayerTotalForSkill(gameState) {
-    const player = gameState.player;
-    let attack = player.stats.attack;
-    let defense = player.stats.defense;
-    let maxHp = player.stats.maxHp;
-
-    if (player.equipment.weapon) {
-      attack += player.equipment.weapon.stats?.attack || 0;
-      defense += player.equipment.weapon.stats?.defense || 0;
-      maxHp += player.equipment.weapon.stats?.maxHp || 0;
-    }
-    if (player.equipment.armor) {
-      attack += player.equipment.armor.stats?.attack || 0;
-      defense += player.equipment.armor.stats?.defense || 0;
-      maxHp += player.equipment.armor.stats?.maxHp || 0;
-    }
-    if (player.equipment.accessory) {
-      attack += player.equipment.accessory.stats?.attack || 0;
-      defense += player.equipment.accessory.stats?.defense || 0;
-      maxHp += player.equipment.accessory.stats?.maxHp || 0;
-    }
-
-    return { attack, defense, maxHp };
+    return CharacterSystem.getPlayerTotalStats(gameState);
   }
 
   static resetCombatEffects(gameState) {
