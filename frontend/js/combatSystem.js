@@ -203,6 +203,10 @@ class CombatSystem {
           lifestealAmount += Math.floor(damage * (effect.percent || 0.1));
           break;
           
+        case 'blood_moon':
+          lifestealAmount += Math.floor(damage * (effect.lifestealPercent || 0.3));
+          break;
+          
         case 'double_strike':
           if (roll < (effect.chance || 0.05)) {
             extraEffects.push({
@@ -253,6 +257,45 @@ class CombatSystem {
         if (actualHeal > 0) {
           this.gameState.player.stats.currentHp += actualHeal;
           messages.push(`✨ ${effect.affixName}：恢复了 ${actualHeal} 点生命值！`);
+        }
+      }
+    });
+
+    return messages;
+  }
+
+  applyEquipmentOnKillEffects() {
+    const effects = this.getEquipmentsSpecialEffects();
+    const messages = [];
+
+    effects.forEach(effect => {
+      if (effect.type === 'soul_reap') {
+        const equipmentSlots = ['weapon', 'armor', 'accessory'];
+        for (const slot of equipmentSlots) {
+          const equipment = this.gameState.player.equipment[slot];
+          if (equipment && equipment.affixes) {
+            const allAffixes = [
+              ...(equipment.affixes.prefixes || []),
+              ...(equipment.affixes.suffixes || []),
+              ...(equipment.affixes.specials || [])
+            ];
+            const affix = allAffixes.find(a => a.id === effect.affixId);
+            if (affix) {
+              if (!affix.stacks) affix.stacks = 0;
+              const maxStacks = effect.maxStacks || 10;
+              const attackPerKill = effect.attackPerKill || 2;
+              
+              if (affix.stacks < maxStacks) {
+                affix.stacks++;
+                if (!equipment.stats) equipment.stats = {};
+                if (!equipment.stats.attack) equipment.stats.attack = 0;
+                equipment.stats.attack += attackPerKill;
+                
+                messages.push(`💀 ${effect.affixName}：攻击力 +${attackPerKill}（${affix.stacks}/${maxStacks}）`);
+              }
+              break;
+            }
+          }
         }
       }
     });
@@ -842,6 +885,12 @@ class CombatSystem {
       this.addCombatLog(weatherTriggerResult.message);
       this.gameState.gameLog.push(weatherTriggerResult.message);
     }
+
+    const killEffects = this.applyEquipmentOnKillEffects();
+    killEffects.forEach(msg => {
+      this.addCombatLog(msg);
+      this.gameState.gameLog.push(msg);
+    });
 
     let droppedItem = null;
     const adjustedDropRate = DifficultySystem.getAdjustedDropRate(enemy.dropRate, this.gameState, false);
