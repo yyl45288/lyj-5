@@ -172,7 +172,7 @@ class CombatSystem {
     }
 
     const killDiffUpdate = DifficultySystem.updateDifficultyScoreRealtime(this.gameState, 'kill', 1);
-    if (this.gameState.comboKills >= 5) {
+    if (this.gameState.comboKills === 5 || this.gameState.comboKills === 10) {
       DifficultySystem.updateDifficultyScoreRealtime(this.gameState, 'combo', this.gameState.comboKills);
     }
 

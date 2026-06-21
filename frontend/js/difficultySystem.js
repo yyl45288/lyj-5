@@ -156,13 +156,16 @@ class DifficultySystem {
     const difficultyState = gameState.difficultyState;
     if (difficultyState && difficultyState.history) {
       const history = difficultyState.history;
-      if (history.gamesPlayed > 0) {
-        const avgFloor = history.highestFloor / history.gamesPlayed;
+      const hasHistory = history.highestFloor > 0 || history.totalKills > 0 || history.gamesPlayed > 0;
+      if (hasHistory) {
+        const gamesPlayed = Math.max(1, history.gamesPlayed);
+        const avgFloor = history.highestFloor / gamesPlayed;
         
         const floorHistoryFactor = Math.min(avgFloor * 4, 30);
         score += floorHistoryFactor;
 
-        const killsHistoryFactor = Math.min((history.totalKills / history.gamesPlayed) * 0.3, 15);
+        const avgKills = history.totalKills / gamesPlayed;
+        const killsHistoryFactor = Math.min(avgKills * 0.3, 15);
         score += killsHistoryFactor;
 
         if (floor > avgFloor * 1.3) {
@@ -366,16 +369,16 @@ class DifficultySystem {
     if (!gameState.difficultyState) return;
 
     const history = gameState.difficultyState.history;
-    const floor = gameState.dungeon.floor;
+    const floor = gameState.dungeon?.floor || 1;
     const kills = gameState.kills || 0;
 
-    history.totalKills = Math.max(history.totalKills, kills);
-    history.totalFloors = Math.max(history.totalFloors, floor);
-    history.highestFloor = Math.max(history.highestFloor, floor);
-
     if (gameOver) {
+      history.totalKills += kills;
       history.gamesPlayed++;
     }
+
+    history.totalFloors = Math.max(history.totalFloors, floor);
+    history.highestFloor = Math.max(history.highestFloor, floor);
 
     this.saveDifficultyHistory(gameState.difficultyState);
   }
