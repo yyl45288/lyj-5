@@ -14,7 +14,7 @@ class DungeonGenerator {
     this.placeStairs();
     const enemyResult = this.placeEnemies(gameState);
     this.placeItems(gameState);
-    const merchantCount = this.placeMerchants() || 0;
+    const merchantCount = this.placeMerchants(gameState) || 0;
     this.placePlayer();
     const map = this.createDungeonMap();
     map.merchantCount = merchantCount;
@@ -188,15 +188,15 @@ class DungeonGenerator {
       const y = Math.floor(Math.random() * (room.height - 2)) + room.y + 1;
 
       if (this.isValidPlacement(x, y)) {
-        let item = getRandomEquipment(this.floor);
+        let item = getRandomEquipment(this.floor, 0, gameState);
         if (gameState) {
           const dropRate = DifficultySystem.getAdjustedDropRate(0.3, gameState, false);
           const rareDropRate = DifficultySystem.getAdjustedDropRate(0.1, gameState, true);
           
           if (Math.random() < rareDropRate) {
-            item = getRandomEquipment(this.floor);
+            item = getRandomEquipment(this.floor, 0, gameState);
             while (item.rarity === 'common' || item.rarity === 'uncommon') {
-              item = getRandomEquipment(this.floor);
+              item = getRandomEquipment(this.floor, 0, gameState);
             }
           }
         }
@@ -213,7 +213,7 @@ class DungeonGenerator {
     return tile.type === 'floor' && !tile.enemy && !tile.item && !tile.merchant;
   }
 
-  placeMerchants() {
+  placeMerchants(gameState = null) {
     const guaranteedEvery = 2;
     const isGuaranteedFloor = this.floor % guaranteedEvery === 0;
     const baseChance = 0.7;
@@ -236,7 +236,7 @@ class DungeonGenerator {
 
       if (this.isValidPlacement(x, y)) {
         this.tiles[y][x].type = 'merchant';
-        this.tiles[y][x].merchant = generateMerchant(this.floor);
+        this.tiles[y][x].merchant = generateMerchant(this.floor, gameState);
         placed++;
       }
     }

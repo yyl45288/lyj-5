@@ -851,11 +851,11 @@ class CombatSystem {
       if (isRareDrop) {
         let attempts = 0;
         do {
-          droppedItem = getRandomEquipment(this.gameState.dungeon.floor);
+          droppedItem = getRandomEquipment(this.gameState.dungeon.floor, 0, this.gameState);
           attempts++;
         } while ((droppedItem.rarity === 'common' || droppedItem.rarity === 'uncommon') && attempts < 10);
       } else {
-        droppedItem = getRandomEquipment(this.gameState.dungeon.floor);
+        droppedItem = getRandomEquipment(this.gameState.dungeon.floor, 0, this.gameState);
       }
       this.gameState.player.inventory.push(droppedItem);
       const rareText = isRareDrop ? '【稀有掉落】' : '';

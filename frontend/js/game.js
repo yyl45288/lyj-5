@@ -539,7 +539,7 @@ class Game {
 
         player.gold -= refreshCost;
         merchant.refreshCount++;
-        merchant.inventory = generateMerchantInventory(floor, merchant);
+        merchant.inventory = generateMerchantInventory(floor, merchant, this.gameState);
         merchant.inventory.forEach(item => {
             item.buyPrice = calculateItemBuyPrice(item, floor, merchant.discount);
         });

@@ -560,12 +560,12 @@ function calculateAttributeValue(attrType, floor) {
   return Math.floor(baseValue * floorMod);
 }
 
-function generateMerchantInventory(floor, merchant) {
+function generateMerchantInventory(floor, merchant, gameState = null) {
   const items = [];
   const itemCount = 3 + Math.floor(Math.random() * 3) + Math.floor(floor / 5);
   
   for (let i = 0; i < itemCount; i++) {
-    const item = getRandomEquipment(floor);
+    const item = getRandomEquipment(floor, 0, gameState);
     item.buyPrice = calculateItemBuyPrice(item, floor, merchant.baseDiscount);
     item.sellPrice = calculateItemSellPrice(item, floor);
     items.push(item);
@@ -574,7 +574,7 @@ function generateMerchantInventory(floor, merchant) {
   return items;
 }
 
-function generateMerchant(floor) {
+function generateMerchant(floor, gameState = null) {
   const baseMerchant = MERCHANT_DATA[Math.floor(Math.random() * MERCHANT_DATA.length)];
   const floorMod = 1 + (floor - 1) * 0.02;
   
@@ -583,7 +583,7 @@ function generateMerchant(floor) {
     id: `${baseMerchant.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     floor: floor,
     discount: baseMerchant.baseDiscount,
-    inventory: generateMerchantInventory(floor, baseMerchant),
+    inventory: generateMerchantInventory(floor, baseMerchant, gameState),
     attributePurchased: {
       maxHp: 0,
       attack: 0,
