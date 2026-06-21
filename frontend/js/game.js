@@ -10,6 +10,7 @@ class Game {
     }
 
     async startNewGame() {
+        this.resetMinimapState();
         this.gameState = CharacterSystem.createNewGameState();
         this.combatSystem = new CombatSystem(this.gameState);
         this.startAutoSave();
@@ -19,6 +20,7 @@ class Game {
     }
 
     async continueGame() {
+        this.resetMinimapState();
         const result = await StorageManager.loadFromLocal();
         if (result.success) {
             this.gameState = CharacterSystem.ensureGameStateCompatibility(result.gameState);
@@ -626,6 +628,7 @@ class Game {
 
     async gameOver() {
         this.stopAutoSave();
+        this.resetMinimapState();
         const finalScore = CharacterSystem.calculateScore(this.gameState);
         
         await StorageManager.saveScore(
@@ -945,13 +948,38 @@ class Game {
             container.classList.remove('minimap-minimized');
             container.classList.add('minimap-maximized');
             overlay.classList.add('active');
+            document.body.appendChild(container);
         } else {
             container.classList.remove('minimap-maximized');
             container.classList.add('minimap-minimized');
             overlay.classList.remove('active');
+            const centerPanel = document.querySelector('.center-panel');
+            const mapContainer = document.getElementById('map-container');
+            if (centerPanel && mapContainer) {
+                centerPanel.insertBefore(container, mapContainer);
+            }
         }
 
         this.renderMinimap();
+    }
+
+    resetMinimapState() {
+        if (!this.isMinimapMaximized) return;
+        this.isMinimapMaximized = false;
+        const container = document.getElementById('minimap-container');
+        const overlay = document.getElementById('minimap-overlay');
+        if (container) {
+            container.classList.remove('minimap-maximized');
+            container.classList.add('minimap-minimized');
+            const centerPanel = document.querySelector('.center-panel');
+            const mapContainer = document.getElementById('map-container');
+            if (centerPanel && mapContainer && container.parentElement !== centerPanel) {
+                centerPanel.insertBefore(container, mapContainer);
+            }
+        }
+        if (overlay) {
+            overlay.classList.remove('active');
+        }
     }
 
     renderInventory() {
@@ -1109,6 +1137,7 @@ class Game {
     quitToMenu() {
         this.stopAutoSave();
         this.saveGame();
+        this.resetMinimapState();
         this.gameState = null;
         this.combatSystem = null;
         this.showScreen('main-menu');
@@ -1222,16 +1251,22 @@ class Game {
             });
         });
 
-        const minimapHeader = document.querySelector('.minimap-header');
-        if (minimapHeader) {
-            minimapHeader.addEventListener('click', () => {
+        const minimapContainer = document.getElementById('minimap-container');
+        const minimapElement = document.getElementById('minimap');
+        if (minimapContainer) {
+            minimapContainer.addEventListener('click', (e) => {
+                e.stopPropagation();
                 this.toggleMinimap();
             });
+            if (minimapElement) {
+                minimapElement.style.cursor = 'pointer';
+            }
         }
 
         const minimapOverlay = document.getElementById('minimap-overlay');
         if (minimapOverlay) {
-            minimapOverlay.addEventListener('click', () => {
+            minimapOverlay.addEventListener('click', (e) => {
+                e.stopPropagation();
                 if (this.isMinimapMaximized) {
                     this.toggleMinimap();
                 }
@@ -1239,6 +1274,11 @@ class Game {
         }
 
         document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.isMinimapMaximized) {
+                e.preventDefault();
+                this.toggleMinimap();
+                return;
+            }
             if (!this.gameState) return;
             
             const activeScreen = document.querySelector('.screen.active').id;
