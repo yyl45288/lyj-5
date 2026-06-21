@@ -47,6 +47,38 @@ const RARITY_AFFIX_COUNT = {
   legendary: { prefix: 1, suffix: 1, special: 1 }
 };
 
+const AFFIX_KEYWORD_MAP = {
+  flame: ['火焰', '烈焰', '炎', '火', '灼热', '燃烧'],
+  frost: ['寒冰', '冰霜', '霜', '冰', '雪', '冻结', '冰冻'],
+  thunder: ['雷霆', '闪电', '雷电', '雷', '电', '霹雳', '闪电'],
+  vampiric: ['吸血', '血族', '嗜血'],
+  vampire: ['吸血', '血族', '嗜血'],
+  agile: ['敏捷', '迅捷', '快速', '灵巧', '疾风'],
+  swift: ['迅捷', '敏捷', '快速', '灵巧', '疾风'],
+  mighty: ['力量', '强力', '狂战士', '勇猛', '刚猛'],
+  sturdy: ['坚固', '结实', '厚重', '稳固', '坚韧'],
+  vital: ['生命', '活力', '生命守护', '生机', '活力'],
+  ancient: ['远古', '上古', '古老', '太古', '洪荒'],
+  shadow: ['暗影', '阴影', '黑暗', '幽灵', '死神', '影', '暗', '鬼'],
+  holy: ['神圣', '圣洁', '天候', '圣', '神恩'],
+  celestial: ['天界', '神圣', '星辰', '圣洁', '天堂', '神佑'],
+  cursed: ['诅咒', '恶魔', '邪', '死灵', '死亡', '死神'],
+  dragon: ['龙', '龙鳞', '龙魂', '龙血', '龙息'],
+  giant: ['巨人', '巨大', '巨型', '大力', '泰坦'],
+  tiger: ['猛虎', '虎', '白虎', '兽王'],
+  turtle: ['玄武', '龟', '玄龟', '龟甲'],
+  phoenix: ['凤凰', '不死鸟', '朱雀', '涅槃'],
+  wolf: ['狼', '狼王', '灰狼', '狼群'],
+  king: ['王', '王者', '帝王', '君主'],
+  god: ['神', '诸神', '神明', '神', '神邸'],
+  destruction: ['毁灭', '破坏', '破灭', '崩坏'],
+  eternity: ['永恒', '不朽', '永生', '不灭'],
+  blood_moon: ['血月', '血', '嗜血', '血月'],
+  soul_reaper: ['噬魂', '灵魂', '死神', '收割', '夺魂'],
+  guardian_angel: ['守护天使', '守护', '天使', '神佑', '圣盾'],
+  time_warp: ['时间扭曲', '时间', '扭曲', '时停', '时光']
+};
+
 const EQUIPMENT_DATA = {
   weapons: [
     { id: 'sword_1', name: '铁剑', type: 'weapon', rarity: 'common', stats: { attack: 3 }, icon: '🗡️', slotName: '武器' },
@@ -221,12 +253,28 @@ function generateAffixesForEquipment(baseEquipment, floor = 1, difficultyScore =
 
   const floorBonus = Math.floor(floor / 5);
   const difficultyBonus = Math.floor(Math.max(0, difficultyScore) / 30);
+  
+  const equipmentName = baseEquipment.baseName || baseEquipment.name;
+
+  const isAffixNameRedundant = (affixId) => {
+    const keywords = AFFIX_KEYWORD_MAP[affixId];
+    if (!keywords) return false;
+    return keywords.some(keyword => equipmentName.includes(keyword));
+  };
 
   const selectAffixes = (affixPool, count, equipmentType) => {
-    const available = affixPool.filter(affix => 
+    let available = affixPool.filter(affix => 
       affix.allowedTypes.includes(equipmentType) && 
-      isRarityAtLeast(rarity, affix.minRarity)
+      isRarityAtLeast(rarity, affix.minRarity) &&
+      !isAffixNameRedundant(affix.id)
     );
+
+    if (available.length === 0) {
+      available = affixPool.filter(affix => 
+        affix.allowedTypes.includes(equipmentType) && 
+        isRarityAtLeast(rarity, affix.minRarity)
+      );
+    }
 
     const selected = [];
     const usedIds = new Set();

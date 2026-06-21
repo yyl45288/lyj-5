@@ -415,14 +415,58 @@ class Game {
         const statsContainer = document.getElementById('shop-item-stats');
         statsContainer.innerHTML = '';
         
+        const isEquipmentItem = item.type && ['weapon', 'armor', 'accessory'].includes(item.type);
+        const slotNames = { weapon: '武器', armor: '护甲', accessory: '饰品' };
+        const slotName = item.slotName || slotNames[item.type] || item.type;
+        
+        if (isEquipmentItem) {
+            statsContainer.innerHTML += `<div class="modal-stat"><span>📍 穿戴部位</span><span>${slotName}</span></div>`;
+        }
+        
+        const equippedItem = isEquipmentItem ? this.gameState.player.equipment[item.type];
+        
+        if (isEquipmentItem && equippedItem) {
+            statsContainer.innerHTML += `<div style="margin-top: 6px; padding: 4px 0; border-top: 1px solid rgba(255,255,255,0.1);">
+                <div style="color: var(--text-secondary); font-size: 0.8rem;">📌 当前装备: ${equippedItem.name}</div>
+            </div>`;
+        }
+        
         if (item.stats && item.stats.attack) {
-            statsContainer.innerHTML += `<div class="modal-stat"><span>⚔️ 攻击力</span><span>+${item.stats.attack}</span></div>`;
+            const compareText = this.getStatCompareText(item, equippedItem, 'attack');
+            statsContainer.innerHTML += `<div class="modal-stat"><span>⚔️ 攻击力</span><span style="color: #2ECC71;">+${item.stats.attack}${compareText}</span></div>`;
         }
         if (item.stats && item.stats.defense) {
-            statsContainer.innerHTML += `<div class="modal-stat"><span>🛡️ 防御力</span><span>+${item.stats.defense}</span></div>`;
+            const compareText = this.getStatCompareText(item, equippedItem, 'defense');
+            statsContainer.innerHTML += `<div class="modal-stat"><span>🛡️ 防御力</span><span style="color: #2ECC71;">+${item.stats.defense}${compareText}</span></div>`;
         }
         if (item.stats && item.stats.maxHp) {
-            statsContainer.innerHTML += `<div class="modal-stat"><span>❤️ 生命值上限</span><span>+${item.stats.maxHp}</span></div>`;
+            const compareText = this.getStatCompareText(item, equippedItem, 'maxHp');
+            statsContainer.innerHTML += `<div class="modal-stat"><span>❤️ 生命值上限</span><span style="color: #2ECC71;">+${item.stats.maxHp}${compareText}</span></div>`;
+        }
+        if (item.stats && item.stats.critChance) {
+            const compareText = this.getStatCompareText(item, equippedItem, 'critChance', true);
+            statsContainer.innerHTML += `<div class="modal-stat"><span>🎯 暴击率</span><span style="color: #F39C12;">+${Math.round(item.stats.critChance * 100)}%${compareText}</span></div>`;
+        }
+        
+        if (item.affixes && (item.affixes.prefixes?.length > 0 || item.affixes.suffixes?.length > 0 || item.affixes.specials?.length > 0)) {
+            statsContainer.innerHTML += `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">`;
+            statsContainer.innerHTML += `<div style="color: var(--accent-gold); font-weight: bold; margin-bottom: 6px; font-size: 0.9rem;">✨ 词缀属性</div>`;
+            
+            const allAffixes = [
+                ...(item.affixes.prefixes || []),
+                ...(item.affixes.suffixes || []),
+                ...(item.affixes.specials || [])
+            ];
+            
+            allAffixes.forEach(affix => {
+                const affixColor = affix.minRarity === 'legendary' ? '#F1C40F' : 
+                                  affix.minRarity === 'epic' ? '#9B59B6' :
+                                  affix.minRarity === 'rare' ? '#3498DB' :
+                                  affix.minRarity === 'uncommon' ? '#2ECC71' : '#95A5A6';
+                statsContainer.innerHTML += `<div style="color: ${affixColor}; margin-bottom: 4px; font-size: 0.85rem;">${affix.description}</div>`;
+            });
+            
+            statsContainer.innerHTML += `</div>`;
         }
 
         const descContainer = document.getElementById('shop-item-desc');
@@ -675,17 +719,30 @@ class Game {
             statsContainer.innerHTML += `<div class="modal-stat"><span>📦 基础装备</span><span>${item.baseName}</span></div>`;
         }
         
+        const isEquipmentItem = item.type && ['weapon', 'armor', 'accessory'].includes(item.type);
+        const equippedItem = isEquipmentItem ? this.gameState.player.equipment[item.type];
+        
+        if (isEquipmentItem && equippedItem) {
+            statsContainer.innerHTML += `<div style="margin-top: 8px; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.1);">
+                <div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 6px;">📌 当前装备: ${equippedItem.name}</div>
+            </div>`;
+        }
+        
         if (item.stats && item.stats.attack) {
-            statsContainer.innerHTML += `<div class="modal-stat"><span>⚔️ 攻击力</span><span style="color: #2ECC71;">+${item.stats.attack}</span></div>`;
+            const compareText = this.getStatCompareText(item, equippedItem, 'attack');
+            statsContainer.innerHTML += `<div class="modal-stat"><span>⚔️ 攻击力</span><span style="color: #2ECC71;">+${item.stats.attack}${compareText}</span></div>`;
         }
         if (item.stats && item.stats.defense) {
-            statsContainer.innerHTML += `<div class="modal-stat"><span>🛡️ 防御力</span><span style="color: #2ECC71;">+${item.stats.defense}</span></div>`;
+            const compareText = this.getStatCompareText(item, equippedItem, 'defense');
+            statsContainer.innerHTML += `<div class="modal-stat"><span>🛡️ 防御力</span><span style="color: #2ECC71;">+${item.stats.defense}${compareText}</span></div>`;
         }
         if (item.stats && item.stats.maxHp) {
-            statsContainer.innerHTML += `<div class="modal-stat"><span>❤️ 生命值</span><span style="color: #2ECC71;">+${item.stats.maxHp}</span></div>`;
+            const compareText = this.getStatCompareText(item, equippedItem, 'maxHp');
+            statsContainer.innerHTML += `<div class="modal-stat"><span>❤️ 生命值</span><span style="color: #2ECC71;">+${item.stats.maxHp}${compareText}</span></div>`;
         }
         if (item.stats && item.stats.critChance) {
-            statsContainer.innerHTML += `<div class="modal-stat"><span>🎯 暴击率</span><span style="color: #F39C12;">+${Math.round(item.stats.critChance * 100)}%</span></div>`;
+            const compareText = this.getStatCompareText(item, equippedItem, 'critChance', true);
+            statsContainer.innerHTML += `<div class="modal-stat"><span>🎯 暴击率</span><span style="color: #F39C12;">+${Math.round(item.stats.critChance * 100)}%${compareText}</span></div>`;
         }
 
         if (item.affixes && (item.affixes.prefixes?.length > 0 || item.affixes.suffixes?.length > 0 || item.affixes.specials?.length > 0)) {
@@ -736,9 +793,33 @@ class Game {
                 equipBtn.style.opacity = '1';
                 equipBtn.style.cursor = 'pointer';
             }
+            
+            if (equippedItem) {
+                equipBtn.textContent = '🔄 替换装备';
+            } else {
+                equipBtn.textContent = '⚔️ 装备';
+            }
         }
 
         document.getElementById('item-modal').classList.remove('hidden');
+    }
+    
+    getStatCompareText(newItem, equippedItem, statName, isPercent = false) {
+        if (!equippedItem || !equippedItem.stats) return '';
+        
+        const newVal = newItem.stats?.[statName] || 0;
+        const oldVal = equippedItem.stats?.[statName] || 0;
+        const diff = newVal - oldVal;
+        
+        if (diff === 0) return '';
+        
+        const formatValue = (val) => isPercent ? `${Math.round(val * 100)}%` : val;
+        
+        if (diff > 0) {
+            return ` <span style="color: #2ECC71; font-size: 0.85rem;">(+${formatValue(diff)})</span>`;
+        } else {
+            return ` <span style="color: #E74C3C; font-size: 0.85rem;">(${formatValue(diff)})</span>`;
+        }
     }
 
     useSelectedItem() {
