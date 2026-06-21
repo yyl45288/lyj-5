@@ -11,7 +11,7 @@ class Game {
 
     async startNewGame() {
         this.resetMinimapState();
-        this.gameState = CharacterSystem.createNewGameState();
+        this.gameState = await CharacterSystem.createNewGameState();
         this.combatSystem = new CombatSystem(this.gameState);
         this.startAutoSave();
         this.showScreen('game-screen');

@@ -117,6 +117,11 @@ class CombatSystem {
     const critText = isCrit ? '【暴击！】' : '';
     this.addCombatLog(`💥 ${enemy.name} 对你造成了 ${critText}${damage} 点伤害！`);
 
+    const diffUpdate = DifficultySystem.updateDifficultyScoreRealtime(this.gameState, 'damage_taken', damage);
+    if (Math.abs(diffUpdate.scoreDelta) >= 1) {
+      this.addCombatLog(`⚖️ 难度评分 ${diffUpdate.scoreDelta > 0 ? '+' : ''}${diffUpdate.scoreDelta.toFixed(1)}，当前：${Math.round(diffUpdate.score)}`);
+    }
+
     if (this.gameState.player.stats.currentHp <= 0) {
       this.gameState.player.stats.currentHp = 0;
       return this.playerDefeated();
@@ -164,6 +169,11 @@ class CombatSystem {
       if (comboBonus > 0) goldMsg += `（连击奖励 x${comboBonus + 1}）`;
       if (enemyRarity !== 'common') goldMsg += `[${enemyRarity}]`;
       this.addCombatLog(goldMsg + '！');
+    }
+
+    const killDiffUpdate = DifficultySystem.updateDifficultyScoreRealtime(this.gameState, 'kill', 1);
+    if (this.gameState.comboKills >= 5) {
+      DifficultySystem.updateDifficultyScoreRealtime(this.gameState, 'combo', this.gameState.comboKills);
     }
 
     Game.updateQuestProgress(this.gameState, 'kill_enemies', 1);
@@ -299,6 +309,8 @@ class CombatSystem {
       levelUps.push({ level: player.stats.level, hpGain, atkGain, defGain });
       this.addCombatLog(`🎊 升级！你现在是 ${player.stats.level} 级了！`);
       this.addCombatLog(`   HP +${hpGain}, ATK +${atkGain}, DEF +${defGain}`);
+
+      DifficultySystem.updateDifficultyScoreRealtime(this.gameState, 'level_up', 1);
     }
 
     return levelUps.length > 0 ? levelUps : null;

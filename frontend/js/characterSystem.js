@@ -54,12 +54,12 @@ class CharacterSystem {
     return gameState;
   }
 
-  static createNewGameState() {
+  static async createNewGameState() {
     const player = this.createNewPlayer();
     const difficultyState = DifficultySystem.createEmptyDifficultyState();
     const gameState = {
       player: player,
-      dungeon: null,
+      dungeon: { floor: 1 },
       weatherState: null,
       difficultyState: difficultyState,
       combat: {
@@ -77,6 +77,9 @@ class CharacterSystem {
       merchantsVisited: 0,
       quests: null
     };
+
+    DifficultySystem.loadHistoryToGameState(gameState);
+    await DifficultySystem.updateDifficulty(gameState);
 
     const dungeon = generateDungeon(50, 50, 1, gameState);
     player.position = { ...dungeon.playerPosition };
@@ -99,8 +102,14 @@ class CharacterSystem {
     }
     gameState.gameLog.push(`📜 新任务已发布，完成任务可获得金币奖励！`);
 
+    const diffState = gameState.difficultyState;
+    if (diffState && diffState.history && diffState.history.gamesPlayed > 0) {
+      const history = diffState.history;
+      gameState.gameLog.push(`📊 历史战绩：已通关 ${history.gamesPlayed} 局，最高第 ${history.highestFloor} 层，累计击杀 ${history.totalKills} 只敌人`);
+    }
+
     const difficultyInfo = DifficultySystem.getDifficultyDescription(gameState);
-    gameState.gameLog.push(`⚖️ 当前难度：${difficultyInfo.icon} ${difficultyInfo.name} - ${difficultyInfo.description}`);
+    gameState.gameLog.push(`⚖️ 初始难度：${difficultyInfo.icon} ${difficultyInfo.name}（评分：${Math.round(difficultyInfo.score)}）- ${difficultyInfo.description}`);
     
     if (dungeon.elitePlaced) {
       gameState.gameLog.push(`💎 警告：本层出现了精英怪物！`);

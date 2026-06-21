@@ -113,7 +113,7 @@ class DifficultySystem {
 
   static calculateDifficultyScore(gameState, leaderboardAvg = 0) {
     const player = gameState.player;
-    const floor = gameState.dungeon.floor;
+    const floor = gameState.dungeon?.floor || 1;
     const kills = gameState.kills || 0;
     const totalStats = CharacterSystem.getPlayerTotalStats(gameState);
     const hpPercent = player.stats.currentHp / totalStats.maxHp;
@@ -158,6 +158,13 @@ class DifficultySystem {
       const history = difficultyState.history;
       if (history.gamesPlayed > 0) {
         const avgFloor = history.highestFloor / history.gamesPlayed;
+        
+        const floorHistoryFactor = Math.min(avgFloor * 4, 30);
+        score += floorHistoryFactor;
+
+        const killsHistoryFactor = Math.min((history.totalKills / history.gamesPlayed) * 0.3, 15);
+        score += killsHistoryFactor;
+
         if (floor > avgFloor * 1.3) {
           score += 10;
         }
@@ -305,6 +312,45 @@ class DifficultySystem {
     }
   }
 
+  static updateDifficultyScoreRealtime(gameState, eventType, value = 1) {
+    if (!gameState.difficultyState) {
+      gameState.difficultyState = this.createEmptyDifficultyState();
+    }
+
+    const diffState = gameState.difficultyState;
+    let scoreDelta = 0;
+
+    switch (eventType) {
+      case 'kill':
+        scoreDelta = value * 0.5;
+        break;
+      case 'damage_taken':
+        scoreDelta = -value * 0.1;
+        break;
+      case 'damage_dealt':
+        scoreDelta = value * 0.02;
+        break;
+      case 'combo':
+        scoreDelta = value * 0.3;
+        break;
+      case 'level_up':
+        scoreDelta = value * 3;
+        break;
+    }
+
+    diffState.difficultyScore = Math.max(-50, Math.min(100, diffState.difficultyScore + scoreDelta));
+    diffState.currentDifficulty = this.getDifficultyFromScore(diffState.difficultyScore);
+    diffState.lastUpdateTime = Date.now();
+
+    this.updateFloorStats(gameState, eventType, value);
+
+    return {
+      difficulty: diffState.currentDifficulty,
+      score: diffState.difficultyScore,
+      scoreDelta: scoreDelta
+    };
+  }
+
   static resetFloorStats(gameState) {
     if (!gameState.difficultyState) return;
     gameState.difficultyState.currentFloorStats = {
@@ -356,6 +402,19 @@ class DifficultySystem {
       console.warn('Failed to load difficulty history:', e);
     }
     return null;
+  }
+
+  static loadHistoryToGameState(gameState) {
+    if (!gameState.difficultyState) {
+      gameState.difficultyState = this.createEmptyDifficultyState();
+    }
+
+    const savedHistory = this.loadDifficultyHistory();
+    if (savedHistory) {
+      gameState.difficultyState.history = { ...savedHistory };
+      return true;
+    }
+    return false;
   }
 
   static async getLeaderboardAverage() {
