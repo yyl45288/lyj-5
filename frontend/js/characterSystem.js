@@ -61,6 +61,24 @@ class CharacterSystem {
       gameState.player.stats.critChance = 0;
     }
     
+    if (!gameState.player.mapBuffs) {
+      gameState.player.mapBuffs = [];
+    }
+    
+    if (gameState.combat) {
+      if (!gameState.combat.playerBuffs) {
+        gameState.combat.playerBuffs = [];
+      }
+      if (gameState.combat.playerTurn === undefined) {
+        gameState.combat.playerTurn = true;
+      }
+      if (gameState.combat.log === undefined) {
+        gameState.combat.log = [];
+      }
+    }
+    
+    this.ensureInventoryCompatibility(gameState.player.inventory);
+    
     this.ensureAllEquipmentAffixes(gameState);
 
     gameState = SkillSystem.ensureSkillCompatibility(gameState);
@@ -68,6 +86,91 @@ class CharacterSystem {
     gameState = DifficultySystem.ensureGameStateCompatibility(gameState);
     
     return gameState;
+  }
+
+  static ensureInventoryCompatibility(inventory) {
+    if (!inventory || !Array.isArray(inventory)) return;
+    
+    for (let i = 0; i < inventory.length; i++) {
+      const item = inventory[i];
+      this.ensureItemCompatibility(item);
+    }
+  }
+
+  static ensureItemCompatibility(item) {
+    if (!item) return;
+    
+    if (item.type === 'weather_scroll' || item.type === 'weather_clear' || 
+        item.type === 'weather_resist' || item.type === 'weather_shield' || 
+        item.type === 'weather_lure') {
+      if (!item.subType) {
+        item.subType = 'weather_scroll';
+      }
+      if (item.stackable === undefined) {
+        item.stackable = true;
+      }
+      if (!item.maxStack) {
+        item.maxStack = 99;
+      }
+      if (!item.quantity) {
+        item.quantity = 1;
+      }
+      if (item.useInCombat === undefined) {
+        item.useInCombat = false;
+      }
+      if (item.useOutOfCombat === undefined) {
+        item.useOutOfCombat = true;
+      }
+      if (!item.baseId) {
+        item.baseId = item.id.replace(/_\d+_\w+$/, '');
+      }
+    }
+    
+    if (item.type === 'potion') {
+      if (!item.subType) {
+        item.subType = 'consumable';
+      }
+      if (item.stackable === undefined) {
+        item.stackable = true;
+      }
+      if (!item.maxStack) {
+        item.maxStack = 99;
+      }
+      if (!item.quantity) {
+        item.quantity = 1;
+      }
+      if (!item.baseId) {
+        item.baseId = item.id.replace(/_\d+_\w+$/, '');
+      }
+    }
+    
+    if (item.type === 'material') {
+      if (!item.subType) {
+        item.subType = 'material';
+      }
+      if (item.stackable === undefined) {
+        item.stackable = true;
+      }
+      if (!item.maxStack) {
+        item.maxStack = 99;
+      }
+      if (!item.quantity) {
+        item.quantity = 1;
+      }
+      if (!item.baseId) {
+        item.baseId = item.id.replace(/_\d+_\w+$/, '');
+      }
+    }
+    
+    if (item.stackable && !item.quantity) {
+      item.quantity = 1;
+    }
+    if (item.stackable && !item.baseId) {
+      item.baseId = item.id.replace(/_\d+_\w+$/, '');
+    }
+    if (item.stackable && !item.maxStack) {
+      item.maxStack = 99;
+    }
   }
 
   static async createNewGameState() {
@@ -1050,9 +1153,11 @@ class CharacterSystem {
   }
 
   static sortInventory(inventory) {
+    this.mergeStackableItems(inventory);
+    
     const categoryOrder = ['equipment', 'consumable', 'material', 'other'];
     
-    return inventory.sort((a, b) => {
+    inventory.sort((a, b) => {
       const categoryA = getItemCategory(a);
       const categoryB = getItemCategory(b);
       
@@ -1072,6 +1177,56 @@ class CharacterSystem {
       if (a.name > b.name) return 1;
       return 0;
     });
+    
+    return inventory;
+  }
+
+  static mergeStackableItems(inventory) {
+    const stackMap = new Map();
+    const nonStackableItems = [];
+    
+    for (let i = 0; i < inventory.length; i++) {
+      const item = inventory[i];
+      if (!isStackableItem(item)) {
+        nonStackableItems.push(item);
+        continue;
+      }
+      
+      const itemKey = item.baseId || item.id.replace(/_\d+_\w+$/, '');
+      if (!stackMap.has(itemKey)) {
+        stackMap.set(itemKey, []);
+      }
+      stackMap.get(itemKey).push(item);
+    }
+    
+    const mergedItems = [];
+    
+    stackMap.forEach((itemStacks, key) => {
+      if (itemStacks.length === 0) return;
+      
+      const templateItem = itemStacks[0];
+      const maxStack = templateItem.maxStack || 99;
+      let totalQuantity = itemStacks.reduce((sum, it) => sum + (it.quantity || 1), 0);
+      
+      while (totalQuantity > 0) {
+        const stackQuantity = Math.min(totalQuantity, maxStack);
+        const newItem = { ...templateItem };
+        if (stackQuantity < maxStack || totalQuantity > maxStack) {
+          newItem.id = `${key}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        } else {
+          newItem.id = templateItem.id;
+        }
+        newItem.quantity = stackQuantity;
+        newItem.baseId = key;
+        mergedItems.push(newItem);
+        totalQuantity -= stackQuantity;
+      }
+    });
+    
+    inventory.length = 0;
+    inventory.push(...nonStackableItems, ...mergedItems);
+    
+    return inventory;
   }
 
   static filterInventory(inventory, category = 'all') {

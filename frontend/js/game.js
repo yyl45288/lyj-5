@@ -759,9 +759,17 @@ class Game {
         const item = this.gameState.player.inventory.find(i => i.id === itemId);
         if (!item) return;
         
+        const inCombat = this.gameState.combat && this.gameState.combat.active;
         const result = CharacterSystem.useConsumable(this.gameState, itemId, quantity);
         if (result.success) {
             this.showNotification(`✅ ${result.message || '使用成功！'}`);
+            
+            if (inCombat) {
+                this.gameState.combat.playerTurn = false;
+                if (this.combatSystem) {
+                    this.combatSystem.tickBuffs();
+                }
+            }
         } else {
             this.showNotification(`❌ ${result.message}`);
         }
@@ -990,8 +998,41 @@ class Game {
         if (!this.selectedItem || !isStackableItem(this.selectedItem)) return;
         const maxQty = this.selectedItem.quantity;
         this.itemQuantity = Math.max(1, Math.min(maxQty, this.itemQuantity + delta));
-        document.getElementById('item-qty-value').textContent = this.itemQuantity;
-        this.showItemModal(this.selectedItem);
+        this.updateItemModalQuantityUI();
+    }
+    
+    updateItemModalQuantityUI() {
+        if (!this.selectedItem) return;
+        const isStackable = isStackableItem(this.selectedItem);
+        if (!isStackable) return;
+        
+        const qtyValue = document.getElementById('item-qty-value');
+        if (qtyValue) qtyValue.textContent = this.itemQuantity;
+        
+        const useBtn = document.getElementById('use-btn');
+        if (useBtn && !useBtn.classList.contains('hidden')) {
+            if (!useBtn.disabled) {
+                useBtn.textContent = `使用 x${this.itemQuantity}`;
+            }
+        }
+        
+        const discardBtn = document.getElementById('discard-btn');
+        if (discardBtn) {
+            discardBtn.textContent = `丢弃 x${this.itemQuantity}`;
+        }
+        
+        const statsContainer = document.getElementById('modal-item-stats');
+        if (statsContainer && this.selectedItem.sellPrice) {
+            const sellRows = statsContainer.querySelectorAll('.modal-stat');
+            sellRows.forEach(row => {
+                const spans = row.querySelectorAll('span');
+                if (spans.length >= 2 && spans[0].textContent.includes('出售价格')) {
+                    const unitPrice = this.selectedItem.sellPrice;
+                    const sellTotal = unitPrice * this.itemQuantity;
+                    spans[1].textContent = `${unitPrice} 金币 (共${sellTotal})`;
+                }
+            });
+        }
     }
     
     changeShopQuantity(delta) {
@@ -999,9 +1040,44 @@ class Game {
         const { item, action } = this.pendingShopItem;
         if (!isStackableItem(item)) return;
         const isBuy = action === 'buy';
-        const maxQty = isBuy ? Math.min(item.quantity, 99) : item.quantity;
+        const maxQty = isBuy ? Math.min(item.quantity || 99, 99) : item.quantity || 1;
         this.shopQuantity = Math.max(1, Math.min(maxQty, this.shopQuantity + delta));
-        this.showShopItemModal(item, action);
+        this.updateShopModalQuantityUI();
+    }
+    
+    updateShopModalQuantityUI() {
+        if (!this.pendingShopItem) return;
+        const { item, action } = this.pendingShopItem;
+        const isStackable = isStackableItem(item);
+        if (!isStackable) return;
+        
+        const qtyValue = document.getElementById('shop-qty-value');
+        const qtyMax = document.getElementById('shop-qty-max');
+        const isBuy = action === 'buy';
+        const maxQty = isBuy ? Math.min(item.quantity || 99, 99) : item.quantity || 1;
+        if (qtyValue) qtyValue.textContent = this.shopQuantity;
+        if (qtyMax) qtyMax.textContent = `/ ${maxQty}`;
+        
+        const confirmBtn = document.getElementById('shop-confirm-btn');
+        if (confirmBtn) {
+            confirmBtn.textContent = isBuy ? `确认购买 x${this.shopQuantity}` : `确认出售 x${this.shopQuantity}`;
+        }
+        
+        const floor = this.gameState.dungeon.floor;
+        const unitPrice = isBuy ? item.buyPrice : calculateItemSellPrice(item, floor);
+        const totalPrice = unitPrice * this.shopQuantity;
+        const priceElement = document.getElementById('shop-item-price');
+        if (priceElement) {
+            priceElement.textContent = isBuy ? `💰 ${totalPrice} (${unitPrice}/个)` : `💰 +${totalPrice} (${unitPrice}/个)`;
+            priceElement.style.color = isBuy ? '#F1C40F' : '#2ECC71';
+        }
+        
+        if (confirmBtn) {
+            const canAfford = !isBuy || this.gameState.player.gold >= totalPrice;
+            confirmBtn.disabled = !canAfford;
+            confirmBtn.style.opacity = canAfford ? '1' : '0.5';
+            confirmBtn.style.cursor = canAfford ? 'pointer' : 'not-allowed';
+        }
     }
 
     closeItemModal() {
