@@ -4,6 +4,10 @@ class CharacterSystem {
     for (let i = 0; i < 3; i++) {
       inventory.push(getRandomEquipment(1));
     }
+    
+    const healthPotion = createStackableItem(CONSUMABLES[0], 5);
+    const manaPotion = createStackableItem(CONSUMABLES[3], 3);
+    inventory.push(healthPotion, manaPotion);
 
     let player = {
       stats: {
@@ -213,18 +217,26 @@ class CharacterSystem {
     if (tile.type === 'item' && tile.item) {
       player.position = { x: newX, y: newY };
       const item = tile.item;
-      player.inventory.push(item);
-      tile.type = 'floor';
-      tile.item = null;
-      gameState.gameLog.push(`📦 你拾取了 ${item.icon} ${item.name}！`);
-      gameState.score += 10;
+      const quantity = item.quantity || 1;
+      
+      const result = this.addItemToInventory(player.inventory, item, quantity);
+      if (result.success) {
+        tile.type = 'floor';
+        tile.item = null;
+        const quantityText = isStackableItem(item) && quantity > 1 ? ` x${quantity}` : '';
+        gameState.gameLog.push(`📦 你拾取了 ${item.icon} ${item.name}${quantityText}！`);
+        gameState.score += 10;
+      } else {
+        gameState.gameLog.push(`❌ ${result.message}`);
+      }
+      
       WeatherSystem.tickWeatherDuration(gameState.weatherState, 1);
       const expiredWeathers = WeatherSystem.tickWeatherDuration(gameState.weatherState, 0);
       this.handleExpiredWeathers(gameState, expiredWeathers);
       if (player.stats.currentHp <= 0) {
         return { type: 'death' };
       }
-      return { type: 'item', item: item };
+      return { type: 'item', item: item, success: result.success };
     }
 
     if (tile.type === 'stairs') {
@@ -244,6 +256,8 @@ class CharacterSystem {
     WeatherSystem.tickWeatherDuration(gameState.weatherState, 1);
     const expiredWeathers2 = WeatherSystem.tickWeatherDuration(gameState.weatherState, 0);
     this.handleExpiredWeathers(gameState, expiredWeathers2);
+    
+    this.tickMapBuffs(gameState);
 
     const randomWeatherResult = this.tryRandomWeatherEvent(gameState);
     if (randomWeatherResult) {
@@ -441,18 +455,19 @@ class CharacterSystem {
     return { success: true, item };
   }
 
-  static discardItem(gameState, itemId) {
+  static discardItem(gameState, itemId, quantity = 1) {
     const player = gameState.player;
-    const itemIndex = player.inventory.findIndex(item => item.id === itemId);
+    
+    const removeResult = this.removeItemFromInventory(player.inventory, itemId, quantity);
+    if (!removeResult.success) {
+      return removeResult;
+    }
 
-    if (itemIndex === -1) return { success: false, message: '物品不存在！' };
+    const item = removeResult.item;
+    const quantityText = isStackableItem(item) && quantity > 1 ? ` x${quantity}` : '';
+    gameState.gameLog.push(`🗑️ 你丢弃了 ${item.icon} ${item.name}${quantityText}！`);
 
-    const item = player.inventory[itemIndex];
-    player.inventory.splice(itemIndex, 1);
-
-    gameState.gameLog.push(`🗑️ 你丢弃了 ${item.icon} ${item.name}！`);
-
-    return { success: true, item };
+    return { success: true, item, quantity };
   }
 
   static calculateScore(gameState) {
@@ -485,25 +500,24 @@ class CharacterSystem {
   static useHealthPotion(gameState) {
     const player = gameState.player;
     const playerStats = this.getPlayerTotalStats(gameState);
-    const healAmount = Math.floor(playerStats.maxHp * 0.3);
-
-    const potionIndex = player.inventory.findIndex(item => item.type === 'potion');
-    if (potionIndex === -1) {
+    
+    const healPotionIndex = player.inventory.findIndex(item => 
+      item.type === 'potion' && item.effect && item.effect.type === 'heal'
+    );
+    
+    if (healPotionIndex === -1) {
       const healAmount = Math.floor(playerStats.maxHp * 0.2);
       player.stats.currentHp = Math.min(player.stats.currentHp + healAmount, playerStats.maxHp);
       const mpRecover = SkillSystem.restRecoverMp(gameState);
       gameState.gameLog.push(`💚 你休息了一下，恢复了 ${healAmount} 点生命值和 ${mpRecover} 点魔法值！`);
+      if (gameState.combat && gameState.combat.active) {
+        gameState.combat.log.push(`💚 休息恢复了 ${healAmount} 点生命值和 ${mpRecover} 点魔法值！`);
+      }
       return { healed: healAmount, mpRecovered: mpRecover, usedPotion: false };
     }
 
-    const potion = player.inventory[potionIndex];
-    player.inventory.splice(potionIndex, 1);
-    player.stats.currentHp = Math.min(player.stats.currentHp + healAmount, playerStats.maxHp);
-    const mpRecover = Math.floor(player.stats.maxMp * 0.2);
-    SkillSystem.recoverMp(gameState, mpRecover);
-
-    gameState.gameLog.push(`🧪 你使用了 ${potion.icon} ${potion.name}，恢复了 ${healAmount} 点生命值和 ${mpRecover} 点魔法值！`);
-    return { healed: healAmount, mpRecovered: mpRecover, usedPotion: true, potion };
+    const potion = player.inventory[healPotionIndex];
+    return this.useConsumable(gameState, potion.id);
   }
 
   static useWeatherScroll(gameState, itemId) {
@@ -594,7 +608,7 @@ class CharacterSystem {
 
   static isUsableItem(item) {
     return item && (
-      item.type === 'potion' || 
+      (item.type === 'potion' && item.effect) || 
       item.type === 'weather_scroll' || 
       item.type === 'weather_clear' ||
       item.type === 'weather_resist' ||
@@ -661,7 +675,7 @@ class CharacterSystem {
     return gameState;
   }
 
-  static buyItem(gameState, merchant, itemId) {
+  static buyItem(gameState, merchant, itemId, quantity = 1) {
     const player = gameState.player;
     const itemIndex = merchant.inventory.findIndex(item => item.id === itemId);
     
@@ -670,25 +684,38 @@ class CharacterSystem {
     }
 
     const item = merchant.inventory[itemIndex];
-    const price = item.buyPrice;
+    const unitPrice = item.buyPrice;
+    const totalPrice = unitPrice * quantity;
 
-    if (player.gold < price) {
+    if (player.gold < totalPrice) {
       return { success: false, message: '金币不足！' };
     }
 
-    if (player.inventory.length >= 20) {
-      return { success: false, message: '背包已满！' };
+    const merchantQuantity = item.quantity || 1;
+    if (merchantQuantity < quantity) {
+      return { success: false, message: `商人只有 ${merchantQuantity} 个该物品！` };
     }
 
-    player.gold -= price;
     const purchasedItem = { ...item };
     delete purchasedItem.buyPrice;
     delete purchasedItem.sellPrice;
-    player.inventory.push(purchasedItem);
-    merchant.inventory.splice(itemIndex, 1);
 
-    gameState.gameLog.push(`💰 购买了 ${item.icon} ${item.name}，花费 ${price} 金币！`);
-    return { success: true, item: purchasedItem, price, message: `购买成功！花费 ${price} 金币。` };
+    const addResult = this.addItemToInventory(player.inventory, purchasedItem, quantity);
+    if (!addResult.success) {
+      return { success: false, message: addResult.message };
+    }
+
+    player.gold -= totalPrice;
+
+    if (merchantQuantity === quantity) {
+      merchant.inventory.splice(itemIndex, 1);
+    } else {
+      item.quantity = merchantQuantity - quantity;
+    }
+
+    const quantityText = isStackableItem(item) && quantity > 1 ? ` x${quantity}` : '';
+    gameState.gameLog.push(`💰 购买了 ${item.icon} ${item.name}${quantityText}，花费 ${totalPrice} 金币！`);
+    return { success: true, item: purchasedItem, price: totalPrice, quantity, message: `购买成功！花费 ${totalPrice} 金币。` };
   }
 
   static buyAttribute(gameState, merchant, attrType) {
@@ -715,7 +742,7 @@ class CharacterSystem {
     return { success: true, attrType, value, price, message: `购买成功！${attrData.name} +${value}，花费 ${price} 金币。` };
   }
 
-  static sellItem(gameState, merchant, itemId) {
+  static sellItem(gameState, merchant, itemId, quantity = 1) {
     const player = gameState.player;
     const itemIndex = player.inventory.findIndex(item => item.id === itemId);
     
@@ -724,13 +751,25 @@ class CharacterSystem {
     }
 
     const item = player.inventory[itemIndex];
-    const price = calculateItemSellPrice(item, gameState.dungeon.floor);
+    const itemQuantity = item.quantity || 1;
+    
+    if (itemQuantity < quantity) {
+      return { success: false, message: `数量不足！当前数量：${itemQuantity}` };
+    }
 
-    player.gold += price;
-    player.inventory.splice(itemIndex, 1);
+    const unitPrice = calculateItemSellPrice(item, gameState.dungeon.floor);
+    const totalPrice = unitPrice * quantity;
 
-    gameState.gameLog.push(`💰 出售了 ${item.icon} ${item.name}，获得 ${price} 金币！`);
-    return { success: true, item, price, message: `出售成功！获得 ${price} 金币。` };
+    const removeResult = this.removeItemFromInventory(player.inventory, itemId, quantity);
+    if (!removeResult.success) {
+      return { success: false, message: removeResult.message };
+    }
+
+    player.gold += totalPrice;
+
+    const quantityText = isStackableItem(item) && quantity > 1 ? ` x${quantity}` : '';
+    gameState.gameLog.push(`💰 出售了 ${item.icon} ${item.name}${quantityText}，获得 ${totalPrice} 金币！`);
+    return { success: true, item, price: totalPrice, quantity, message: `出售成功！获得 ${totalPrice} 金币。` };
   }
 
   static stealFromMerchant(gameState, merchant) {
@@ -807,5 +846,292 @@ class CharacterSystem {
     if (expReward >= 50) return 'rare';
     if (expReward >= 30) return 'uncommon';
     return 'common';
+  }
+
+  static addItemToInventory(inventory, item, quantity = 1) {
+    if (!item) return { success: false, message: '无效的物品！' };
+    
+    if (isStackableItem(item)) {
+      const existingIndex = inventory.findIndex(i => 
+        isStackableItem(i) && i.baseId === item.baseId
+      );
+      
+      if (existingIndex !== -1) {
+        const existingItem = inventory[existingIndex];
+        const maxStack = existingItem.maxStack || 99;
+        const newQuantity = existingItem.quantity + quantity;
+        
+        if (newQuantity > maxStack) {
+          const overflow = newQuantity - maxStack;
+          existingItem.quantity = maxStack;
+          
+          if (inventory.length >= 20) {
+            return { success: false, message: '背包已满，无法放入更多物品！', added: quantity - overflow, overflow };
+          }
+          
+          const newStack = createStackableItem(item, overflow);
+          inventory.push(newStack);
+          return { success: true, added: quantity, overflow: 0, stacked: true };
+        } else {
+          existingItem.quantity = newQuantity;
+          return { success: true, added: quantity, overflow: 0, stacked: true };
+        }
+      } else {
+        if (inventory.length >= 20) {
+          return { success: false, message: '背包已满！' };
+        }
+        
+        const newItem = quantity > 1 ? createStackableItem(item, quantity) : createStackableItem(item, 1);
+        inventory.push(newItem);
+        return { success: true, added: quantity, overflow: 0, stacked: false, newStack: true };
+      }
+    } else {
+      if (inventory.length >= 20) {
+        return { success: false, message: '背包已满！' };
+      }
+      inventory.push(item);
+      return { success: true, added: 1, overflow: 0, stacked: false, newStack: true };
+    }
+  }
+
+  static removeItemFromInventory(inventory, itemId, quantity = 1) {
+    const itemIndex = inventory.findIndex(i => i.id === itemId);
+    
+    if (itemIndex === -1) {
+      return { success: false, message: '物品不存在！' };
+    }
+    
+    const item = inventory[itemIndex];
+    
+    if (isStackableItem(item)) {
+      if (item.quantity < quantity) {
+        return { success: false, message: `数量不足！当前数量：${item.quantity}` };
+      }
+      
+      if (item.quantity === quantity) {
+        inventory.splice(itemIndex, 1);
+        return { success: true, removed: quantity, item };
+      } else {
+        item.quantity -= quantity;
+        return { success: true, removed: quantity, item: { ...item, quantity } };
+      }
+    } else {
+      inventory.splice(itemIndex, 1);
+      return { success: true, removed: 1, item };
+    }
+  }
+
+  static useConsumable(gameState, itemId) {
+    const player = gameState.player;
+    const itemIndex = player.inventory.findIndex(i => i.id === itemId);
+    
+    if (itemIndex === -1) {
+      return { success: false, message: '物品不存在！' };
+    }
+    
+    const item = player.inventory[itemIndex];
+    
+    if (!this.isUsableItem(item)) {
+      return { success: false, message: '该物品无法使用！' };
+    }
+    
+    const inCombat = gameState.combat && gameState.combat.active;
+    
+    if (inCombat && !item.useInCombat) {
+      return { success: false, message: '该物品无法在战斗中使用！' };
+    }
+    
+    if (!inCombat && !item.useOutOfCombat) {
+      return { success: false, message: '该物品只能在战斗中使用！' };
+    }
+    
+    const result = this.applyConsumableEffect(gameState, item);
+    
+    if (result.success) {
+      this.removeItemFromInventory(player.inventory, itemId, 1);
+    }
+    
+    return result;
+  }
+
+  static applyConsumableEffect(gameState, item) {
+    const player = gameState.player;
+    const playerStats = this.getPlayerTotalStats(gameState);
+    
+    if (item.type === 'potion' && item.effect) {
+      const effect = item.effect;
+      
+      switch (effect.type) {
+        case 'heal': {
+          let healAmount = effect.isPercent 
+            ? Math.floor(playerStats.maxHp * effect.value) 
+            : effect.value;
+          const oldHp = player.stats.currentHp;
+          player.stats.currentHp = Math.min(player.stats.currentHp + healAmount, playerStats.maxHp);
+          healAmount = player.stats.currentHp - oldHp;
+          
+          if (healAmount > 0) {
+            gameState.gameLog.push(`🧪 使用了 ${item.icon} ${item.name}，恢复了 ${healAmount} 点生命值！`);
+            if (gameState.combat && gameState.combat.active) {
+              gameState.combat.log.push(`🧪 使用了 ${item.name}，恢复了 ${healAmount} 点生命值！`);
+            }
+            return { success: true, effect: 'heal', value: healAmount };
+          }
+          return { success: false, message: '生命值已满！' };
+        }
+        
+        case 'mana': {
+          let manaAmount = effect.isPercent 
+            ? Math.floor(player.stats.maxMp * effect.value) 
+            : effect.value;
+          const oldMp = player.stats.currentMp;
+          player.stats.currentMp = Math.min(player.stats.currentMp + manaAmount, player.stats.maxMp);
+          manaAmount = player.stats.currentMp - oldMp;
+          
+          if (manaAmount > 0) {
+            gameState.gameLog.push(`💙 使用了 ${item.icon} ${item.name}，恢复了 ${manaAmount} 点魔法值！`);
+            if (gameState.combat && gameState.combat.active) {
+              gameState.combat.log.push(`💙 使用了 ${item.name}，恢复了 ${manaAmount} 点魔法值！`);
+            }
+            return { success: true, effect: 'mana', value: manaAmount };
+          }
+          return { success: false, message: '魔法值已满！' };
+        }
+        
+        case 'buff': {
+          if (!gameState.combat.active) {
+            if (!player.mapBuffs) player.mapBuffs = [];
+            player.mapBuffs.push({
+              stat: effect.stat,
+              value: effect.value,
+              duration: effect.duration
+            });
+          } else {
+            if (!gameState.combat.playerBuffs) gameState.combat.playerBuffs = [];
+            gameState.combat.playerBuffs.push({
+              stat: effect.stat,
+              value: effect.value,
+              duration: effect.duration
+            });
+          }
+          
+          const statNames = { attack: '攻击力', defense: '防御力' };
+          const statName = statNames[effect.stat] || effect.stat;
+          const durationType = gameState.combat.active ? '回合' : '步';
+          
+          gameState.gameLog.push(`✨ 使用了 ${item.icon} ${item.name}，${statName}+${effect.value}，持续${effect.duration}${durationType}！`);
+          if (gameState.combat && gameState.combat.active) {
+            gameState.combat.log.push(`✨ 使用了 ${item.name}，${statName}+${effect.value}，持续${effect.duration}回合！`);
+          }
+          return { success: true, effect: 'buff', stat: effect.stat, value: effect.value, duration: effect.duration };
+        }
+      }
+    }
+    
+    if (item.type === 'weather_scroll' || item.type === 'weather_clear' || 
+        item.type === 'weather_resist' || item.type === 'weather_shield' || 
+        item.type === 'weather_lure') {
+      return this.useWeatherScroll(gameState, item.id);
+    }
+    
+    return { success: false, message: '无法使用该物品！' };
+  }
+
+  static sortInventory(inventory) {
+    const categoryOrder = ['equipment', 'consumable', 'material', 'other'];
+    
+    return inventory.sort((a, b) => {
+      const categoryA = getItemCategory(a);
+      const categoryB = getItemCategory(b);
+      
+      const categoryDiff = categoryOrder.indexOf(categoryA) - categoryOrder.indexOf(categoryB);
+      if (categoryDiff !== 0) return categoryDiff;
+      
+      if (categoryA === 'equipment') {
+        const typeOrder = ['weapon', 'armor', 'accessory'];
+        const typeDiff = typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type);
+        if (typeDiff !== 0) return typeDiff;
+      }
+      
+      const rarityDiff = getRarityIndex(b.rarity) - getRarityIndex(a.rarity);
+      if (rarityDiff !== 0) return rarityDiff;
+      
+      if (a.name < b.name) return -1;
+      if (a.name > b.name) return 1;
+      return 0;
+    });
+  }
+
+  static filterInventory(inventory, category = 'all') {
+    if (category === 'all') return [...inventory];
+    
+    return inventory.filter(item => {
+      const itemCategory = getItemCategory(item);
+      return itemCategory === category;
+    });
+  }
+
+  static getInventorySummary(inventory) {
+    const summary = {
+      total: inventory.length,
+      equipment: 0,
+      consumable: 0,
+      material: 0,
+      other: 0,
+      maxSlots: 20
+    };
+    
+    inventory.forEach(item => {
+      const category = getItemCategory(item);
+      summary[category]++;
+    });
+    
+    return summary;
+  }
+
+  static tickMapBuffs(gameState) {
+    const player = gameState.player;
+    if (!player.mapBuffs || player.mapBuffs.length === 0) return;
+    
+    const expiredBuffs = [];
+    player.mapBuffs = player.mapBuffs.filter(buff => {
+      buff.duration--;
+      if (buff.duration <= 0) {
+        expiredBuffs.push(buff);
+        return false;
+      }
+      return true;
+    });
+    
+    if (expiredBuffs.length > 0) {
+      const statNames = { attack: '攻击力', defense: '防御力' };
+      expiredBuffs.forEach(buff => {
+        const statName = statNames[buff.stat] || buff.stat;
+        gameState.gameLog.push(`⏱️ ${statName}增益效果已消失。`);
+      });
+    }
+  }
+
+  static getBuffedStats(gameState, baseStats) {
+    const player = gameState.player;
+    const stats = { ...baseStats };
+    
+    if (gameState.combat && gameState.combat.active && gameState.combat.playerBuffs) {
+      gameState.combat.playerBuffs.forEach(buff => {
+        if (stats[buff.stat] !== undefined) {
+          stats[buff.stat] += buff.value;
+        }
+      });
+    }
+    
+    if (player.mapBuffs) {
+      player.mapBuffs.forEach(buff => {
+        if (stats[buff.stat] !== undefined) {
+          stats[buff.stat] += buff.value;
+        }
+      });
+    }
+    
+    return stats;
   }
 }

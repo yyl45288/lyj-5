@@ -164,8 +164,13 @@ const WEATHER_SCROLLS = [
     id: 'scroll_acid_rain',
     name: '酸雨卷轴',
     type: 'weather_scroll',
+    subType: 'consumable',
     rarity: 'uncommon',
     icon: '📜',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
     weatherId: 'acid_rain',
     duration: 25,
     description: '使用后召唤酸雨天气，持续25步。'
@@ -174,8 +179,13 @@ const WEATHER_SCROLLS = [
     id: 'scroll_divine_light',
     name: '圣光卷轴',
     type: 'weather_scroll',
+    subType: 'consumable',
     rarity: 'rare',
     icon: '📜',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
     weatherId: 'divine_light',
     duration: 20,
     description: '使用后召唤神圣光辉，持续20步。'
@@ -184,8 +194,13 @@ const WEATHER_SCROLLS = [
     id: 'scroll_thunderstorm',
     name: '雷暴卷轴',
     type: 'weather_scroll',
+    subType: 'consumable',
     rarity: 'rare',
     icon: '📜',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
     weatherId: 'thunderstorm',
     duration: 20,
     description: '使用后召唤雷电风暴，持续20步。'
@@ -194,8 +209,13 @@ const WEATHER_SCROLLS = [
     id: 'scroll_magma_heat',
     name: '熔岩卷轴',
     type: 'weather_scroll',
+    subType: 'consumable',
     rarity: 'epic',
     icon: '📜',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
     weatherId: 'magma_heat',
     duration: 15,
     description: '使用后召唤熔岩热浪，持续15步。'
@@ -204,16 +224,26 @@ const WEATHER_SCROLLS = [
     id: 'scroll_clear_weather',
     name: '晴空咒符',
     type: 'weather_clear',
+    subType: 'consumable',
     rarity: 'uncommon',
     icon: '🧿',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
     description: '使用后清除所有天气效果。'
   },
   {
     id: 'potion_weather_resist',
     name: '天气抗性药剂',
     type: 'weather_resist',
+    subType: 'consumable',
     rarity: 'uncommon',
     icon: '🧪',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
     duration: 30,
     description: '使用后30步内免疫天气伤害和移动阻碍，天气负面效果减半。'
   },
@@ -221,8 +251,13 @@ const WEATHER_SCROLLS = [
     id: 'scroll_weather_shield',
     name: '天气护盾卷轴',
     type: 'weather_shield',
+    subType: 'consumable',
     rarity: 'rare',
     icon: '📜',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
     duration: 20,
     description: '使用后20步内完全免疫所有负面天气效果，正面天气效果增强。'
   },
@@ -230,11 +265,324 @@ const WEATHER_SCROLLS = [
     id: 'item_weather_lure',
     name: '天候水晶',
     type: 'weather_lure',
+    subType: 'consumable',
     rarity: 'epic',
     icon: '💎',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
     description: '使用后将当前所有负面天气转化为随机正面天气。'
   }
 ];
+
+const CONSUMABLES = [
+  {
+    id: 'potion_health_small',
+    name: '小型生命药水',
+    type: 'potion',
+    subType: 'consumable',
+    rarity: 'common',
+    icon: '🧪',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
+    effect: { type: 'heal', value: 30, isPercent: false },
+    description: '使用后恢复30点生命值。'
+  },
+  {
+    id: 'potion_health_medium',
+    name: '中型生命药水',
+    type: 'potion',
+    subType: 'consumable',
+    rarity: 'uncommon',
+    icon: '🧪',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
+    effect: { type: 'heal', value: 60, isPercent: false },
+    description: '使用后恢复60点生命值。'
+  },
+  {
+    id: 'potion_health_large',
+    name: '大型生命药水',
+    type: 'potion',
+    subType: 'consumable',
+    rarity: 'rare',
+    icon: '🧪',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
+    effect: { type: 'heal', value: 100, isPercent: false },
+    description: '使用后恢复100点生命值。'
+  },
+  {
+    id: 'potion_mana_small',
+    name: '小型魔法药水',
+    type: 'potion',
+    subType: 'consumable',
+    rarity: 'common',
+    icon: '💙',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
+    effect: { type: 'mana', value: 15, isPercent: false },
+    description: '使用后恢复15点魔法值。'
+  },
+  {
+    id: 'potion_mana_medium',
+    name: '中型魔法药水',
+    type: 'potion',
+    subType: 'consumable',
+    rarity: 'uncommon',
+    icon: '💙',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
+    effect: { type: 'mana', value: 30, isPercent: false },
+    description: '使用后恢复30点魔法值。'
+  },
+  {
+    id: 'potion_mana_large',
+    name: '大型魔法药水',
+    type: 'potion',
+    subType: 'consumable',
+    rarity: 'rare',
+    icon: '💙',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
+    effect: { type: 'mana', value: 50, isPercent: false },
+    description: '使用后恢复50点魔法值。'
+  },
+  {
+    id: 'potion_strength',
+    name: '力量药剂',
+    type: 'potion',
+    subType: 'consumable',
+    rarity: 'rare',
+    icon: '💪',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
+    effect: { type: 'buff', stat: 'attack', value: 10, duration: 5 },
+    description: '使用后攻击力+10，持续5回合（战斗中）或5步（地图上）。'
+  },
+  {
+    id: 'potion_defense',
+    name: '防御药剂',
+    type: 'potion',
+    subType: 'consumable',
+    rarity: 'rare',
+    icon: '🛡️',
+    stackable: true,
+    maxStack: 99,
+    useInCombat: true,
+    useOutOfCombat: true,
+    effect: { type: 'buff', stat: 'defense', value: 8, duration: 5 },
+    description: '使用后防御力+8，持续5回合（战斗中）或5步（地图上）。'
+  }
+];
+
+const MATERIALS = [
+  {
+    id: 'material_slime_gel',
+    name: '史莱姆凝胶',
+    type: 'material',
+    subType: 'material',
+    rarity: 'common',
+    icon: '🟢',
+    stackable: true,
+    maxStack: 99,
+    baseValue: 15,
+    description: '史莱姆掉落的凝胶，可用于炼金。',
+    droppedBy: ['slime'],
+    dropChance: 0.6
+  },
+  {
+    id: 'material_goblin_ear',
+    name: '哥布林耳朵',
+    type: 'material',
+    subType: 'material',
+    rarity: 'common',
+    icon: '👂',
+    stackable: true,
+    maxStack: 99,
+    baseValue: 20,
+    description: '哥布林的耳朵，某些商人会高价收购。',
+    droppedBy: ['goblin'],
+    dropChance: 0.5
+  },
+  {
+    id: 'material_bone',
+    name: '骷髅骨头',
+    type: 'material',
+    subType: 'material',
+    rarity: 'common',
+    icon: '🦴',
+    stackable: true,
+    maxStack: 99,
+    baseValue: 18,
+    description: '骷髅兵掉落的骨头，可用于制作武器。',
+    droppedBy: ['skeleton'],
+    dropChance: 0.5
+  },
+  {
+    id: 'material_iron_ore',
+    name: '铁矿石',
+    type: 'material',
+    subType: 'material',
+    rarity: 'common',
+    icon: '🪨',
+    stackable: true,
+    maxStack: 99,
+    baseValue: 25,
+    description: '从地下开采的铁矿石，可用于锻造。',
+    mapSpawn: true,
+    spawnChance: 0.08
+  },
+  {
+    id: 'material_gold_ore',
+    name: '金矿石',
+    type: 'material',
+    subType: 'material',
+    rarity: 'uncommon',
+    icon: '✨',
+    stackable: true,
+    maxStack: 99,
+    baseValue: 60,
+    description: '稀有的金矿石，价值不菲。',
+    mapSpawn: true,
+    spawnChance: 0.04
+  },
+  {
+    id: 'material_herb',
+    name: '草药',
+    type: 'material',
+    subType: 'material',
+    rarity: 'common',
+    icon: '🌿',
+    stackable: true,
+    maxStack: 99,
+    baseValue: 12,
+    description: '生长在地牢中的草药，可用于制作药水。',
+    mapSpawn: true,
+    spawnChance: 0.1
+  },
+  {
+    id: 'material_magic_crystal',
+    name: '魔力水晶',
+    type: 'material',
+    subType: 'material',
+    rarity: 'rare',
+    icon: '💎',
+    stackable: true,
+    maxStack: 99,
+    baseValue: 80,
+    description: '蕴含魔力的水晶，极为稀有。',
+    mapSpawn: true,
+    spawnChance: 0.03,
+    droppedBy: ['ghost', 'lich'],
+    dropChance: 0.3
+  },
+  {
+    id: 'material_orc_tooth',
+    name: '兽人獠牙',
+    type: 'material',
+    subType: 'material',
+    rarity: 'uncommon',
+    icon: '🦷',
+    stackable: true,
+    maxStack: 99,
+    baseValue: 35,
+    description: '兽人锋利的獠牙，可用于制作饰品。',
+    droppedBy: ['orc'],
+    dropChance: 0.4
+  },
+  {
+    id: 'material_vampire_blood',
+    name: '吸血鬼之血',
+    type: 'material',
+    subType: 'material',
+    rarity: 'rare',
+    icon: '🩸',
+    stackable: true,
+    maxStack: 99,
+    baseValue: 70,
+    description: '吸血鬼的血液，蕴含黑暗力量。',
+    droppedBy: ['vampire'],
+    dropChance: 0.4
+  },
+  {
+    id: 'material_wolf_fang',
+    name: '狼人尖牙',
+    type: 'material',
+    subType: 'material',
+    rarity: 'rare',
+    icon: '🐺',
+    stackable: true,
+    maxStack: 99,
+    baseValue: 65,
+    description: '狼人的锋利尖牙。',
+    droppedBy: ['werewolf'],
+    dropChance: 0.4
+  },
+  {
+    id: 'material_demon_horn',
+    name: '恶魔之角',
+    type: 'material',
+    subType: 'material',
+    rarity: 'epic',
+    icon: '😈',
+    stackable: true,
+    maxStack: 99,
+    baseValue: 120,
+    description: '恶魔的尖角，散发着邪恶的气息。',
+    droppedBy: ['demon'],
+    dropChance: 0.35
+  },
+  {
+    id: 'material_dragon_scale',
+    name: '龙鳞',
+    type: 'material',
+    subType: 'material',
+    rarity: 'legendary',
+    icon: '🐉',
+    stackable: true,
+    maxStack: 99,
+    baseValue: 200,
+    description: '巨龙的鳞片，传说级的锻造材料。',
+    droppedBy: ['dragon'],
+    dropChance: 0.5
+  },
+  {
+    id: 'material_lich_skull',
+    name: '巫妖头骨',
+    type: 'material',
+    subType: 'material',
+    rarity: 'legendary',
+    icon: '💀',
+    stackable: true,
+    maxStack: 99,
+    baseValue: 180,
+    description: '巫妖的头骨，蕴含强大的亡灵魔力。',
+    droppedBy: ['lich'],
+    dropChance: 0.4
+  }
+];
+
+const ITEM_CATEGORIES = {
+  equipment: ['weapon', 'armor', 'accessory'],
+  consumable: ['potion', 'weather_scroll', 'weather_clear', 'weather_resist', 'weather_shield', 'weather_lure'],
+  material: ['material']
+};
 
 const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
@@ -473,10 +821,108 @@ function getRandomWeatherScroll(floor = 1) {
   }
 
   const baseScroll = scrollsOfRarity[Math.floor(Math.random() * scrollsOfRarity.length)];
-  return {
-    ...baseScroll,
-    id: `${baseScroll.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  return createStackableItem(baseScroll);
+}
+
+function getRandomConsumable(floor = 1) {
+  const allConsumables = [...CONSUMABLES, ...WEATHER_SCROLLS];
+  
+  const rarityWeights = {
+    common: 50,
+    uncommon: 30 + floor,
+    rare: 15 + floor * 0.5,
+    epic: 4 + floor * 0.2
   };
+
+  const totalWeight = Object.values(rarityWeights).reduce((a, b) => a + b, 0);
+  let random = Math.random() * totalWeight;
+  let selectedRarity = 'common';
+
+  for (const [rarity, weight] of Object.entries(rarityWeights)) {
+    random -= weight;
+    if (random <= 0) {
+      selectedRarity = rarity;
+      break;
+    }
+  }
+
+  const itemsOfRarity = allConsumables.filter(s => s.rarity === selectedRarity);
+  if (itemsOfRarity.length === 0) {
+    return allConsumables[Math.floor(Math.random() * allConsumables.length)];
+  }
+
+  const baseItem = itemsOfRarity[Math.floor(Math.random() * itemsOfRarity.length)];
+  return createStackableItem(baseItem);
+}
+
+function getRandomMaterial(floor = 1, options = {}) {
+  let availableMaterials;
+  
+  if (options.mapSpawn) {
+    availableMaterials = MATERIALS.filter(m => m.mapSpawn);
+  } else if (options.enemyType) {
+    availableMaterials = MATERIALS.filter(m => m.droppedBy && m.droppedBy.includes(options.enemyType));
+  } else {
+    availableMaterials = MATERIALS;
+  }
+  
+  if (availableMaterials.length === 0) return null;
+
+  const rarityWeights = {
+    common: 50,
+    uncommon: 30 + floor,
+    rare: 15 + floor * 0.5,
+    epic: 4 + floor * 0.2,
+    legendary: 1 + floor * 0.1
+  };
+
+  const totalWeight = Object.values(rarityWeights).reduce((a, b) => a + b, 0);
+  let random = Math.random() * totalWeight;
+  let selectedRarity = 'common';
+
+  for (const [rarity, weight] of Object.entries(rarityWeights)) {
+    random -= weight;
+    if (random <= 0) {
+      selectedRarity = rarity;
+      break;
+    }
+  }
+
+  const itemsOfRarity = availableMaterials.filter(m => m.rarity === selectedRarity);
+  if (itemsOfRarity.length === 0) {
+    return availableMaterials[Math.floor(Math.random() * availableMaterials.length)];
+  }
+
+  const baseItem = itemsOfRarity[Math.floor(Math.random() * itemsOfRarity.length)];
+  return createStackableItem(baseItem);
+}
+
+function createStackableItem(baseItem, quantity = 1) {
+  return {
+    ...baseItem,
+    id: `${baseItem.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    baseId: baseItem.id,
+    quantity: quantity
+  };
+}
+
+function isStackableItem(item) {
+  return item && item.stackable === true;
+}
+
+function getItemCategory(item) {
+  if (!item || !item.type) return 'other';
+  
+  for (const [category, types] of Object.entries(ITEM_CATEGORIES)) {
+    if (types.includes(item.type)) {
+      return category;
+    }
+  }
+  return 'other';
+}
+
+function getAllConsumables() {
+  return [...CONSUMABLES, ...WEATHER_SCROLLS];
 }
 
 function getRandomEnemy(floor = 1) {
@@ -520,7 +966,7 @@ function calculateItemBuyPrice(item, floor, merchantDiscount = 1.0) {
     legendary: 20
   };
   
-  let baseValue = 0;
+  let baseValue = item.baseValue || 0;
   if (item.stats) {
     baseValue += (item.stats.attack || 0) * 15;
     baseValue += (item.stats.defense || 0) * 15;
@@ -530,6 +976,16 @@ function calculateItemBuyPrice(item, floor, merchantDiscount = 1.0) {
   if (item.weatherProtection) baseValue += 100;
   if (item.weatherDamageResist) baseValue += 80;
   if (item.ignoreWeatherMoveBlock) baseValue += 60;
+  
+  if (item.effect) {
+    if (item.effect.type === 'heal') {
+      baseValue += item.effect.isPercent ? item.effect.value * 3 : item.effect.value * 0.8;
+    } else if (item.effect.type === 'mana') {
+      baseValue += item.effect.isPercent ? item.effect.value * 4 : item.effect.value * 1.2;
+    } else if (item.effect.type === 'buff') {
+      baseValue += (item.effect.value || 0) * 3 * (item.effect.duration || 1) * 0.5;
+    }
+  }
   
   if (baseValue < 20) baseValue = 20;
   
@@ -562,13 +1018,35 @@ function calculateAttributeValue(attrType, floor) {
 
 function generateMerchantInventory(floor, merchant, gameState = null) {
   const items = [];
-  const itemCount = 3 + Math.floor(Math.random() * 3) + Math.floor(floor / 5);
+  const equipmentCount = 3 + Math.floor(Math.random() * 2) + Math.floor(floor / 5);
+  const consumableCount = 2 + Math.floor(Math.random() * 2);
+  const materialCount = 2 + Math.floor(Math.random() * 2);
   
-  for (let i = 0; i < itemCount; i++) {
+  for (let i = 0; i < equipmentCount; i++) {
     const item = getRandomEquipment(floor, 0, gameState);
     item.buyPrice = calculateItemBuyPrice(item, floor, merchant.baseDiscount);
     item.sellPrice = calculateItemSellPrice(item, floor);
     items.push(item);
+  }
+  
+  for (let i = 0; i < consumableCount; i++) {
+    const item = getRandomConsumable(floor);
+    const quantity = 3 + Math.floor(Math.random() * 5);
+    item.quantity = quantity;
+    item.buyPrice = calculateItemBuyPrice(item, floor, merchant.baseDiscount);
+    item.sellPrice = calculateItemSellPrice(item, floor);
+    items.push(item);
+  }
+  
+  for (let i = 0; i < materialCount; i++) {
+    const item = getRandomMaterial(floor);
+    if (item) {
+      const quantity = 5 + Math.floor(Math.random() * 10);
+      item.quantity = quantity;
+      item.buyPrice = calculateItemBuyPrice(item, floor, merchant.baseDiscount);
+      item.sellPrice = calculateItemSellPrice(item, floor);
+      items.push(item);
+    }
   }
   
   return items;

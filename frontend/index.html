@@ -246,7 +246,19 @@
 
             <div class="right-panel">
                 <div class="inventory-panel">
-                    <h3 class="panel-title">🎒 背包</h3>
+                    <div class="inventory-header">
+                        <h3 class="panel-title">🎒 背包</h3>
+                        <div class="inventory-actions">
+                            <button class="inventory-sort-btn" id="sort-inventory-btn" title="一键整理">📦 整理</button>
+                        </div>
+                    </div>
+                    <div class="inventory-filters" id="inventory-filters">
+                        <button class="inventory-filter-btn active" data-filter="all">全部</button>
+                        <button class="inventory-filter-btn" data-filter="equipment">装备</button>
+                        <button class="inventory-filter-btn" data-filter="consumable">消耗品</button>
+                        <button class="inventory-filter-btn" data-filter="material">素材</button>
+                    </div>
+                    <div class="inventory-summary" id="inventory-summary"></div>
                     <div id="inventory-grid" class="inventory-grid"></div>
                 </div>
                 <div class="quest-panel">
@@ -322,6 +334,13 @@
                 <span class="modal-item-rarity" id="modal-item-rarity">普通</span>
             </div>
             <div class="modal-item-stats" id="modal-item-stats"></div>
+            <div class="quantity-selector hidden" id="item-quantity-selector">
+                <span class="quantity-label">数量:</span>
+                <button class="quantity-btn" id="item-qty-minus">-</button>
+                <span class="quantity-value" id="item-qty-value">1</span>
+                <button class="quantity-btn" id="item-qty-plus">+</button>
+                <span class="quantity-max" id="item-qty-max">/ 99</span>
+            </div>
             <div class="modal-actions">
                 <button class="modal-btn" id="equip-btn">装备</button>
                 <button class="modal-btn hidden" id="use-btn">使用</button>
@@ -366,6 +385,13 @@
                 <span class="modal-item-rarity" id="shop-item-rarity">普通</span>
             </div>
             <div class="shop-item-price" id="shop-item-price">💰 50</div>
+            <div class="quantity-selector hidden" id="shop-quantity-selector">
+                <span class="quantity-label">数量:</span>
+                <button class="quantity-btn" id="shop-qty-minus">-</button>
+                <span class="quantity-value" id="shop-qty-value">1</span>
+                <button class="quantity-btn" id="shop-qty-plus">+</button>
+                <span class="quantity-max" id="shop-qty-max">/ 99</span>
+            </div>
             <div class="modal-item-stats" id="shop-item-stats"></div>
             <div class="shop-item-desc" id="shop-item-desc"></div>
             <div class="modal-actions">

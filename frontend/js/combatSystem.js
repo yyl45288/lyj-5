@@ -893,6 +893,8 @@ class CombatSystem {
     });
 
     let droppedItem = null;
+    let droppedMaterial = null;
+    let droppedConsumable = null;
     const adjustedDropRate = DifficultySystem.getAdjustedDropRate(enemy.dropRate, this.gameState, false);
     const isRareDrop = Math.random() < DifficultySystem.getAdjustedDropRate(0.15, this.gameState, true);
     
@@ -906,10 +908,39 @@ class CombatSystem {
       } else {
         droppedItem = getRandomEquipment(this.gameState.dungeon.floor, 0, this.gameState);
       }
-      this.gameState.player.inventory.push(droppedItem);
-      const rareText = isRareDrop ? '【稀有掉落】' : '';
-      this.addCombatLog(`📦 ${enemy.name} ${rareText}掉落了 ${droppedItem.icon} ${droppedItem.name}！`);
-      DifficultySystem.updateFloorStats(this.gameState, 'item_found', 1);
+      const addResult = CharacterSystem.addItemToInventory(this.gameState.player.inventory, droppedItem, 1);
+      if (addResult.success) {
+        const rareText = isRareDrop ? '【稀有掉落】' : '';
+        this.addCombatLog(`📦 ${enemy.name} ${rareText}掉落了 ${droppedItem.icon} ${droppedItem.name}！`);
+        DifficultySystem.updateFloorStats(this.gameState, 'item_found', 1);
+      } else {
+        this.addCombatLog(`❌ 背包已满，无法拾取 ${droppedItem.name}！`);
+      }
+    }
+
+    const enemyBaseType = enemy.id.split('_')[0];
+    const materialData = MATERIALS.find(m => m.droppedBy && m.droppedBy.includes(enemyBaseType));
+    if (materialData && Math.random() < materialData.dropChance) {
+      droppedMaterial = createStackableItem(materialData);
+      const quantity = 1 + Math.floor(Math.random() * 3);
+      droppedMaterial.quantity = quantity;
+      
+      const addResult = CharacterSystem.addItemToInventory(this.gameState.player.inventory, droppedMaterial, quantity);
+      if (addResult.success) {
+        this.addCombatLog(`📦 ${enemy.name} 掉落了 ${droppedMaterial.icon} ${droppedMaterial.name} x${quantity}！`);
+      } else {
+        this.addCombatLog(`❌ 背包已满，无法拾取 ${droppedMaterial.name}！`);
+      }
+    }
+
+    if (Math.random() < 0.2) {
+      droppedConsumable = getRandomConsumable(this.gameState.dungeon.floor);
+      if (droppedConsumable) {
+        const addResult = CharacterSystem.addItemToInventory(this.gameState.player.inventory, droppedConsumable, 1);
+        if (addResult.success) {
+          this.addCombatLog(`📦 ${enemy.name} 掉落了 ${droppedConsumable.icon} ${droppedConsumable.name}！`);
+        }
+      }
     }
 
     const levelResult = this.checkLevelUp();

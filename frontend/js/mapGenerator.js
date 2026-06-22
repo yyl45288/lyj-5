@@ -176,6 +176,8 @@ class DungeonGenerator {
 
   placeItems(gameState = null) {
     const itemCount = 3 + Math.floor(this.floor / 2);
+    const materialCount = 4 + Math.floor(this.floor / 2);
+    const consumableCount = 2 + Math.floor(this.floor / 3);
     let placed = 0;
     let attempts = 0;
 
@@ -203,6 +205,50 @@ class DungeonGenerator {
         this.tiles[y][x].type = 'item';
         this.tiles[y][x].item = item;
         placed++;
+      }
+    }
+
+    placed = 0;
+    attempts = 0;
+    while (placed < materialCount && attempts < 200) {
+      attempts++;
+      const room = this.rooms[Math.floor(Math.random() * this.rooms.length)];
+      if (!room) continue;
+
+      const x = Math.floor(Math.random() * (room.width - 2)) + room.x + 1;
+      const y = Math.floor(Math.random() * (room.height - 2)) + room.y + 1;
+
+      if (this.isValidPlacement(x, y)) {
+        const material = getRandomMaterial(this.floor, { mapSpawn: true });
+        if (material) {
+          const quantity = 1 + Math.floor(Math.random() * 3);
+          material.quantity = quantity;
+          this.tiles[y][x].type = 'item';
+          this.tiles[y][x].item = material;
+          placed++;
+        }
+      }
+    }
+
+    placed = 0;
+    attempts = 0;
+    while (placed < consumableCount && attempts < 200) {
+      attempts++;
+      const room = this.rooms[Math.floor(Math.random() * this.rooms.length)];
+      if (!room) continue;
+
+      const x = Math.floor(Math.random() * (room.width - 2)) + room.x + 1;
+      const y = Math.floor(Math.random() * (room.height - 2)) + room.y + 1;
+
+      if (this.isValidPlacement(x, y)) {
+        const consumable = getRandomConsumable(this.floor);
+        if (consumable) {
+          const quantity = 1 + Math.floor(Math.random() * 2);
+          consumable.quantity = quantity;
+          this.tiles[y][x].type = 'item';
+          this.tiles[y][x].item = consumable;
+          placed++;
+        }
       }
     }
   }

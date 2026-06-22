@@ -7,6 +7,9 @@ class Game {
         this.currentMerchant = null;
         this.activeTab = 'buy';
         this.isMinimapMaximized = false;
+        this.inventoryFilter = 'all';
+        this.itemQuantity = 1;
+        this.shopQuantity = 1;
     }
 
     async startNewGame() {
@@ -300,13 +303,20 @@ class Game {
                  item.affixes.suffixes?.length > 0 || 
                  item.affixes.specials?.length > 0);
             const affixIndicator = hasAffixes ? '✨' : '';
+            const isStackable = isStackableItem(item);
+            const quantityText = isStackable && item.quantity > 1 
+                ? `<span class="item-quantity">x${item.quantity}</span>` 
+                : '';
             
             html += `
                 <div class="merchant-item ${rarityClass} ${disabledClass}" data-index="${index}" data-action="view-buy">
-                    <div class="merchant-item-icon">${item.icon}${affixIndicator}</div>
+                    <div class="merchant-item-icon">${item.icon}${affixIndicator}${quantityText}</div>
                     <div class="merchant-item-name">${item.name}</div>
                     <div class="merchant-item-price">💰 ${item.buyPrice}</div>
                     <div class="merchant-item-stats">
+                        ${item.effect?.type === 'heal' ? `<span>❤️+${item.effect.value}${item.effect.isPercent ? '%' : ''}</span>` : ''}
+                        ${item.effect?.type === 'mana' ? `<span>💧+${item.effect.value}${item.effect.isPercent ? '%' : ''}</span>` : ''}
+                        ${item.effect?.type === 'buff' ? `<span>⚔️+${item.effect.value}</span>` : ''}
                         ${item.stats?.attack ? `<span>⚔️+${item.stats.attack}</span>` : ''}
                         ${item.stats?.defense ? `<span>🛡️+${item.stats.defense}</span>` : ''}
                         ${item.stats?.maxHp ? `<span>❤️+${item.stats.maxHp}</span>` : ''}
@@ -363,13 +373,20 @@ class Game {
                  item.affixes.suffixes?.length > 0 || 
                  item.affixes.specials?.length > 0);
             const affixIndicator = hasAffixes ? '✨' : '';
+            const isStackable = isStackableItem(item);
+            const quantityText = isStackable && item.quantity > 1 
+                ? `<span class="item-quantity">x${item.quantity}</span>` 
+                : '';
             
             html += `
                 <div class="merchant-item ${rarityClass}" data-index="${index}" data-action="view-sell">
-                    <div class="merchant-item-icon">${item.icon}${affixIndicator}</div>
+                    <div class="merchant-item-icon">${item.icon}${affixIndicator}${quantityText}</div>
                     <div class="merchant-item-name">${item.name}</div>
                     <div class="merchant-item-price" style="color: #2ECC71;">💰 ${sellPrice}</div>
                     <div class="merchant-item-stats">
+                        ${item.effect?.type === 'heal' ? `<span>❤️+${item.effect.value}${item.effect.isPercent ? '%' : ''}</span>` : ''}
+                        ${item.effect?.type === 'mana' ? `<span>💧+${item.effect.value}${item.effect.isPercent ? '%' : ''}</span>` : ''}
+                        ${item.effect?.type === 'buff' ? `<span>⚔️+${item.effect.value}</span>` : ''}
                         ${item.stats?.attack ? `<span>⚔️+${item.stats.attack}</span>` : ''}
                         ${item.stats?.defense ? `<span>🛡️+${item.stats.defense}</span>` : ''}
                         ${item.stats?.maxHp ? `<span>❤️+${item.stats.maxHp}</span>` : ''}
@@ -395,9 +412,12 @@ class Game {
 
     showShopItemModal(item, action) {
         this.pendingShopItem = { item, action };
+        this.shopQuantity = 1;
         const isBuy = action === 'buy';
         const floor = this.gameState.dungeon.floor;
-        const price = isBuy ? item.buyPrice : calculateItemSellPrice(item, floor);
+        const unitPrice = isBuy ? item.buyPrice : calculateItemSellPrice(item, floor);
+        const isStackable = isStackableItem(item);
+        const maxQuantity = isStackable ? (isBuy ? Math.min(item.quantity, 99) : item.quantity) : 1;
 
         document.getElementById('shop-item-name').textContent = item.name;
         document.getElementById('shop-item-icon').textContent = item.icon;
@@ -408,12 +428,45 @@ class Game {
         rarityElement.style.background = RARITY_COLORS[item.rarity] || '#95A5A6';
         rarityElement.style.color = '#fff';
 
+        const quantitySelector = document.getElementById('shop-quantity-selector');
+        const qtyValue = document.getElementById('shop-qty-value');
+        const qtyMax = document.getElementById('shop-qty-max');
+        
+        if (isStackable) {
+            quantitySelector.classList.remove('hidden');
+            qtyValue.textContent = this.shopQuantity;
+            qtyMax.textContent = `/ ${maxQuantity}`;
+        } else {
+            quantitySelector.classList.add('hidden');
+        }
+
+        const totalPrice = unitPrice * this.shopQuantity;
         const priceElement = document.getElementById('shop-item-price');
-        priceElement.textContent = isBuy ? `💰 ${price}` : `💰 +${price}`;
+        priceElement.textContent = isBuy ? `💰 ${totalPrice} (${unitPrice}/个)` : `💰 +${totalPrice} (${unitPrice}/个)`;
         priceElement.style.color = isBuy ? '#F1C40F' : '#2ECC71';
 
         const statsContainer = document.getElementById('shop-item-stats');
         statsContainer.innerHTML = '';
+        
+        if (isStackable && item.quantity > 1) {
+            statsContainer.innerHTML += `<div class="modal-stat"><span>📦 库存数量</span><span>${item.quantity}</span></div>`;
+        }
+        
+        if (item.effect) {
+            const effect = item.effect;
+            const statNames = { attack: '攻击力', defense: '防御力', speed: '速度' };
+            if (effect.type === 'heal') {
+                statsContainer.innerHTML += `<div class="modal-stat"><span>❤️ 恢复生命</span><span style="color: #2ECC71;">+${effect.value}${effect.isPercent ? '%' : ''}</span></div>`;
+            } else if (effect.type === 'mana') {
+                statsContainer.innerHTML += `<div class="modal-stat"><span>💧 恢复魔法</span><span style="color: #3498DB;">+${effect.value}${effect.isPercent ? '%' : ''}</span></div>`;
+            } else if (effect.type === 'buff') {
+                const statName = statNames[effect.stat] || effect.stat;
+                statsContainer.innerHTML += `<div class="modal-stat"><span>⚔️ ${statName}提升</span><span style="color: #E74C3C;">+${effect.value}</span></div>`;
+                if (effect.duration) {
+                    statsContainer.innerHTML += `<div class="modal-stat"><span>⏱️ 持续时间</span><span>${effect.duration} 回合/步</span></div>`;
+                }
+            }
+        }
         
         const isEquipmentItem = item.type && ['weapon', 'armor', 'accessory'].includes(item.type);
         const slotNames = { weapon: '武器', armor: '护甲', accessory: '饰品' };
@@ -423,7 +476,7 @@ class Game {
             statsContainer.innerHTML += `<div class="modal-stat"><span>📍 穿戴部位</span><span>${slotName}</span></div>`;
         }
         
-        const equippedItem = isEquipmentItem ? this.gameState.player.equipment[item.type];
+        const equippedItem = isEquipmentItem ? this.gameState.player.equipment[item.type] : null;
         
         if (isEquipmentItem && equippedItem) {
             statsContainer.innerHTML += `<div style="margin-top: 6px; padding: 4px 0; border-top: 1px solid rgba(255,255,255,0.1);">
@@ -477,10 +530,10 @@ class Game {
         descContainer.innerHTML += `<div class="shop-item-desc-text" style="color: #95A5A6; margin-top: 8px; font-size: 0.9rem;">${isBuy ? '点击"确认购买"完成交易' : '点击"确认出售"获得金币'}</div>`;
 
         const confirmBtn = document.getElementById('shop-confirm-btn');
-        confirmBtn.textContent = isBuy ? '确认购买' : '确认出售';
+        confirmBtn.textContent = isBuy ? `确认购买 x${this.shopQuantity}` : `确认出售 x${this.shopQuantity}`;
         confirmBtn.style.background = isBuy ? '#3498DB' : '#2ECC71';
 
-        const canAfford = !isBuy || this.gameState.player.gold >= price;
+        const canAfford = !isBuy || this.gameState.player.gold >= totalPrice;
         confirmBtn.disabled = !canAfford;
         confirmBtn.style.opacity = canAfford ? '1' : '0.5';
         confirmBtn.style.cursor = canAfford ? 'pointer' : 'not-allowed';
@@ -497,16 +550,17 @@ class Game {
         if (!this.pendingShopItem) return;
         
         const { item, action } = this.pendingShopItem;
+        const quantity = this.shopQuantity;
         
         if (action === 'buy') {
-            const result = CharacterSystem.buyItem(this.gameState, this.currentMerchant, item.id);
+            const result = CharacterSystem.buyItem(this.gameState, this.currentMerchant, item.id, quantity);
             if (result.success) {
                 this.showNotification(`✅ ${result.message}`);
             } else {
                 this.showNotification(`❌ ${result.message}`);
             }
         } else {
-            const result = CharacterSystem.sellItem(this.gameState, this.currentMerchant, item.id);
+            const result = CharacterSystem.sellItem(this.gameState, this.currentMerchant, item.id, quantity);
             if (result.success) {
                 this.showNotification(`✅ ${result.message}`);
             } else {
@@ -690,16 +744,38 @@ class Game {
 
     discardItem(itemId) {
         if (!this.gameState) return;
-        const result = CharacterSystem.discardItem(this.gameState, itemId);
+        const quantity = this.itemQuantity;
+        const result = CharacterSystem.discardItem(this.gameState, itemId, quantity);
         if (result && !result.success) {
             this.showNotification(`❌ ${result.message}`);
         }
         this.render();
         this.closeItemModal();
     }
+    
+    useItem(itemId) {
+        if (!this.gameState) return;
+        const quantity = this.itemQuantity;
+        const item = this.gameState.player.inventory.find(i => i.id === itemId);
+        if (!item) return;
+        
+        for (let i = 0; i < quantity; i++) {
+            const result = CharacterSystem.useConsumable(this.gameState, itemId);
+            if (!result.success) {
+                this.showNotification(`❌ ${result.message}`);
+                break;
+            } else if (i === 0) {
+                this.showNotification(`✅ ${result.message}`);
+            }
+        }
+        
+        this.render();
+        this.closeItemModal();
+    }
 
     showItemModal(item) {
         this.selectedItem = item;
+        this.itemQuantity = 1;
         document.getElementById('modal-item-name').textContent = item.name;
         document.getElementById('modal-item-icon').textContent = item.icon;
         
@@ -708,19 +784,54 @@ class Game {
         rarityElement.style.background = RARITY_COLORS[item.rarity] || '#95A5A6';
         rarityElement.style.color = '#fff';
 
+        const quantitySelector = document.getElementById('item-quantity-selector');
+        const qtyValue = document.getElementById('item-qty-value');
+        const qtyMax = document.getElementById('item-qty-max');
+        const isStackable = isStackableItem(item);
+        
+        if (isStackable) {
+            quantitySelector.classList.remove('hidden');
+            qtyValue.textContent = this.itemQuantity;
+            qtyMax.textContent = `/ ${item.quantity}`;
+        } else {
+            quantitySelector.classList.add('hidden');
+        }
+
         const statsContainer = document.getElementById('modal-item-stats');
         statsContainer.innerHTML = '';
         
+        if (isStackable && item.quantity > 1) {
+            statsContainer.innerHTML += `<div class="modal-stat"><span>📦 数量</span><span>${item.quantity}</span></div>`;
+        }
+        
+        if (item.effect) {
+            const effect = item.effect;
+            const statNames = { attack: '攻击力', defense: '防御力', speed: '速度' };
+            if (effect.type === 'heal') {
+                statsContainer.innerHTML += `<div class="modal-stat"><span>❤️ 恢复生命</span><span style="color: #2ECC71;">+${effect.value}${effect.isPercent ? '%' : ''}</span></div>`;
+            } else if (effect.type === 'mana') {
+                statsContainer.innerHTML += `<div class="modal-stat"><span>💧 恢复魔法</span><span style="color: #3498DB;">+${effect.value}${effect.isPercent ? '%' : ''}</span></div>`;
+            } else if (effect.type === 'buff') {
+                const statName = statNames[effect.stat] || effect.stat;
+                statsContainer.innerHTML += `<div class="modal-stat"><span>⚔️ ${statName}提升</span><span style="color: #E74C3C;">+${effect.value}</span></div>`;
+                if (effect.duration) {
+                    statsContainer.innerHTML += `<div class="modal-stat"><span>⏱️ 持续时间</span><span>${effect.duration} 回合/步</span></div>`;
+                }
+            }
+        }
+        
         const slotNames = { weapon: '武器', armor: '护甲', accessory: '饰品' };
         const slotName = item.slotName || slotNames[item.type] || item.type;
-        statsContainer.innerHTML += `<div class="modal-stat"><span>📍 穿戴部位</span><span>${slotName}</span></div>`;
+        if (item.type && ['weapon', 'armor', 'accessory'].includes(item.type)) {
+            statsContainer.innerHTML += `<div class="modal-stat"><span>📍 穿戴部位</span><span>${slotName}</span></div>`;
+        }
         
         if (item.baseName && item.baseName !== item.name) {
             statsContainer.innerHTML += `<div class="modal-stat"><span>📦 基础装备</span><span>${item.baseName}</span></div>`;
         }
         
         const isEquipmentItem = item.type && ['weapon', 'armor', 'accessory'].includes(item.type);
-        const equippedItem = isEquipmentItem ? this.gameState.player.equipment[item.type];
+        const equippedItem = isEquipmentItem ? this.gameState.player.equipment[item.type] : null;
         
         if (isEquipmentItem && equippedItem) {
             statsContainer.innerHTML += `<div style="margin-top: 8px; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.1);">
@@ -766,6 +877,18 @@ class Game {
             statsContainer.innerHTML += `</div>`;
         }
 
+        if (item.sellPrice) {
+            const sellTotal = isStackable ? item.sellPrice * this.itemQuantity : item.sellPrice;
+            statsContainer.innerHTML += `<div class="modal-stat"><span>💰 出售价格</span><span>${item.sellPrice} 金币${isStackable ? ` (共${sellTotal})` : ''}</span></div>`;
+        }
+
+        if (item.useInCombat || item.useOutOfCombat) {
+            const useText = [];
+            if (item.useInCombat) useText.push('战斗中可使用');
+            if (item.useOutOfCombat) useText.push('非战斗可使用');
+            statsContainer.innerHTML += `<div class="modal-stat"><span>💡 使用场景</span><span>${useText.join('，')}</span></div>`;
+        }
+
         if (item.description) {
             statsContainer.innerHTML += `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary); font-size: 0.9rem;">${item.description}</div>`;
         }
@@ -776,10 +899,15 @@ class Game {
 
         const equipBtn = document.getElementById('equip-btn');
         const useBtn = document.getElementById('use-btn');
+        const discardBtn = document.getElementById('discard-btn');
         
         if (CharacterSystem.isUsableItem(item)) {
             equipBtn.classList.add('hidden');
             useBtn.classList.remove('hidden');
+            const inCombat = this.gameState.combat && this.gameState.combat.active;
+            const canUse = (inCombat && item.useInCombat) || (!inCombat && item.useOutOfCombat);
+            useBtn.disabled = !canUse;
+            useBtn.textContent = canUse ? `使用 x${this.itemQuantity}` : (inCombat ? '战斗中不可使用' : '无法使用');
         } else {
             equipBtn.classList.remove('hidden');
             useBtn.classList.add('hidden');
@@ -800,6 +928,13 @@ class Game {
                 equipBtn.textContent = '⚔️ 装备';
             }
         }
+
+        if (isStackable) {
+            discardBtn.textContent = `丢弃 x${this.itemQuantity}`;
+        } else {
+            discardBtn.textContent = '丢弃';
+        }
+        discardBtn.disabled = isEquipmentItem && equippedItem && equippedItem.id === item.id;
 
         document.getElementById('item-modal').classList.remove('hidden');
     }
@@ -825,13 +960,51 @@ class Game {
     useSelectedItem() {
         if (!this.selectedItem) return;
         
-        const result = CharacterSystem.useWeatherScroll(this.gameState, this.selectedItem.id);
-        if (result && result.success) {
-            this.showNotification(result.message);
+        if (this.selectedItem.subType === 'weather_scroll') {
+            const result = CharacterSystem.useWeatherScroll(this.gameState, this.selectedItem.id);
+            if (result && result.success) {
+                this.showNotification(result.message);
+            }
+        } else if (this.selectedItem.subType === 'consumable') {
+            this.useItem(this.selectedItem.id);
+            return;
         }
         
         this.closeItemModal();
         this.render();
+    }
+    
+    sortInventory() {
+        if (!this.gameState) return;
+        CharacterSystem.sortInventory(this.gameState.player.inventory);
+        this.showNotification('📦 背包已整理！');
+        this.render();
+    }
+    
+    filterInventory(category) {
+        this.inventoryFilter = category;
+        document.querySelectorAll('.inventory-filter-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.filter === category);
+        });
+        this.renderInventory();
+    }
+    
+    changeItemQuantity(delta) {
+        if (!this.selectedItem || !isStackableItem(this.selectedItem)) return;
+        const maxQty = this.selectedItem.quantity;
+        this.itemQuantity = Math.max(1, Math.min(maxQty, this.itemQuantity + delta));
+        document.getElementById('item-qty-value').textContent = this.itemQuantity;
+        this.showItemModal(this.selectedItem);
+    }
+    
+    changeShopQuantity(delta) {
+        if (!this.pendingShopItem) return;
+        const { item, action } = this.pendingShopItem;
+        if (!isStackableItem(item)) return;
+        const isBuy = action === 'buy';
+        const maxQty = isBuy ? Math.min(item.quantity, 99) : item.quantity;
+        this.shopQuantity = Math.max(1, Math.min(maxQty, this.shopQuantity + delta));
+        this.showShopItemModal(item, action);
     }
 
     closeItemModal() {
@@ -1270,28 +1443,47 @@ class Game {
 
     renderInventory() {
         const inventory = this.gameState.player.inventory;
+        const filteredInventory = CharacterSystem.filterInventory(inventory, this.inventoryFilter);
         const gridElement = document.getElementById('inventory-grid');
+        const summaryElement = document.getElementById('inventory-summary');
+        
+        if (summaryElement) {
+            const summary = CharacterSystem.getInventorySummary(inventory);
+            summaryElement.innerHTML = `
+                <span class="summary-item" title="装备">⚔️ ${summary.equipment}</span>
+                <span class="summary-item" title="消耗品">🧪 ${summary.consumable}</span>
+                <span class="summary-item" title="素材">📦 ${summary.material}</span>
+                <span class="summary-item total" title="总数">${summary.total}/${summary.maxSlots}</span>
+            `;
+        }
         
         let html = '';
         const maxSlots = 20;
         
         for (let i = 0; i < maxSlots; i++) {
-            if (i < inventory.length) {
-                const item = inventory[i];
+            if (i < filteredInventory.length) {
+                const item = filteredInventory[i];
                 const hasAffixes = item.affixes && 
                     (item.affixes.prefixes?.length > 0 || 
                      item.affixes.suffixes?.length > 0 || 
                      item.affixes.specials?.length > 0);
                 const affixIndicator = hasAffixes ? '✨' : '';
+                const quantityText = isStackableItem(item) && item.quantity > 1 
+                    ? `<span class="item-quantity">${item.quantity}</span>` 
+                    : '';
+                const categoryIcon = getItemCategory(item) === 'consumable' ? '🧪' : 
+                                     getItemCategory(item) === 'material' ? '📦' : '';
+                
                 html += `
                     <div class="inventory-slot rarity-${item.rarity}" 
                          data-item-id="${item.id}"
-                         title="${item.name}">
+                         title="${item.name}${isStackableItem(item) ? ` (x${item.quantity})` : ''}">
                         ${item.icon}${affixIndicator}
+                        ${quantityText}
                     </div>
                 `;
             } else {
-                html += '<div class="inventory-slot"></div>';
+                html += '<div class="inventory-slot empty"></div>';
             }
         }
         
@@ -1755,6 +1947,46 @@ class Game {
                 this.closeShopItemModal();
             }
         });
+
+        const sortBtn = document.getElementById('sort-inventory-btn');
+        if (sortBtn) {
+            sortBtn.addEventListener('click', () => {
+                this.sortInventory();
+            });
+        }
+
+        document.querySelectorAll('.inventory-filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const filter = btn.dataset.filter;
+                this.filterInventory(filter);
+            });
+        });
+
+        const itemQtyMinus = document.getElementById('item-qty-minus');
+        const itemQtyPlus = document.getElementById('item-qty-plus');
+        if (itemQtyMinus) {
+            itemQtyMinus.addEventListener('click', () => {
+                this.changeItemQuantity(-1);
+            });
+        }
+        if (itemQtyPlus) {
+            itemQtyPlus.addEventListener('click', () => {
+                this.changeItemQuantity(1);
+            });
+        }
+
+        const shopQtyMinus = document.getElementById('shop-qty-minus');
+        const shopQtyPlus = document.getElementById('shop-qty-plus');
+        if (shopQtyMinus) {
+            shopQtyMinus.addEventListener('click', () => {
+                this.changeShopQuantity(-1);
+            });
+        }
+        if (shopQtyPlus) {
+            shopQtyPlus.addEventListener('click', () => {
+                this.changeShopQuantity(1);
+            });
+        }
 
         ['tab-buy', 'tab-sell', 'tab-upgrade', 'tab-steal'].forEach(tabId => {
             document.getElementById(tabId).addEventListener('click', () => {
