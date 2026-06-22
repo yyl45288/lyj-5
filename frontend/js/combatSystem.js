@@ -75,6 +75,28 @@ class CombatSystem {
     return { attack, defense, maxHp, critChance };
   }
 
+  tickBuffs() {
+    if (!this.gameState.combat.playerBuffs || this.gameState.combat.playerBuffs.length === 0) return;
+    
+    const expiredBuffs = [];
+    this.gameState.combat.playerBuffs = this.gameState.combat.playerBuffs.filter(buff => {
+      buff.duration--;
+      if (buff.duration <= 0) {
+        expiredBuffs.push(buff);
+        return false;
+      }
+      return true;
+    });
+    
+    if (expiredBuffs.length > 0) {
+      const statNames = { attack: '攻击力', defense: '防御力', speed: '速度' };
+      expiredBuffs.forEach(buff => {
+        const statName = statNames[buff.stat] || buff.stat;
+        this.addCombatLog(`⏱️ ${statName}增益效果已消失。`);
+      });
+    }
+  }
+
   getEquipmentsSpecialEffects() {
     const effects = [];
     const equipment = this.gameState.player.equipment;
@@ -469,6 +491,7 @@ class CombatSystem {
     }
 
     SkillSystem.tickCombatEffects(this.gameState);
+    this.tickBuffs();
     
     const extraTurn = this.checkEquipmentExtraTurn();
     if (extraTurn.success) {
@@ -715,6 +738,7 @@ class CombatSystem {
     }
 
     SkillSystem.tickCombatEffects(this.gameState);
+    this.tickBuffs();
     
     const extraTurn = this.checkEquipmentExtraTurn();
     if (extraTurn.success) {
@@ -824,6 +848,7 @@ class CombatSystem {
     const turnStartEffects = this.applyEquipmentOnTurnStartEffects();
     turnStartEffects.forEach(msg => this.addCombatLog(msg));
 
+    this.tickBuffs();
     this.gameState.combat.playerTurn = true;
     return { type: 'enemyAttack', damage, isCrit, playerHp: this.gameState.player.stats.currentHp };
   }

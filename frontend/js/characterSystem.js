@@ -637,7 +637,8 @@ class CharacterSystem {
     addEquipmentStats(player.equipment.armor);
     addEquipmentStats(player.equipment.accessory);
 
-    return { attack, defense, maxHp, critChance };
+    const baseStats = { attack, defense, maxHp, critChance };
+    return this.getBuffedStats(gameState, baseStats);
   }
 
   static ensureEquipmentAffixes(equipment) {
@@ -921,7 +922,7 @@ class CharacterSystem {
     }
   }
 
-  static useConsumable(gameState, itemId) {
+  static useConsumable(gameState, itemId, quantity = 1) {
     const player = gameState.player;
     const itemIndex = player.inventory.findIndex(i => i.id === itemId);
     
@@ -945,16 +946,23 @@ class CharacterSystem {
       return { success: false, message: '该物品只能在战斗中使用！' };
     }
     
-    const result = this.applyConsumableEffect(gameState, item);
+    const availableQuantity = isStackableItem(item) ? item.quantity : 1;
+    const useQuantity = Math.min(quantity, availableQuantity);
+    
+    if (useQuantity <= 0) {
+      return { success: false, message: '数量无效！' };
+    }
+    
+    const result = this.applyConsumableEffect(gameState, item, useQuantity);
     
     if (result.success) {
-      this.removeItemFromInventory(player.inventory, itemId, 1);
+      this.removeItemFromInventory(player.inventory, itemId, useQuantity);
     }
     
     return result;
   }
 
-  static applyConsumableEffect(gameState, item) {
+  static applyConsumableEffect(gameState, item, quantity = 1) {
     const player = gameState.player;
     const playerStats = this.getPlayerTotalStats(gameState);
     
@@ -964,53 +972,56 @@ class CharacterSystem {
       switch (effect.type) {
         case 'heal': {
           let healAmount = effect.isPercent 
-            ? Math.floor(playerStats.maxHp * effect.value) 
-            : effect.value;
+            ? Math.floor(playerStats.maxHp * effect.value) * quantity
+            : effect.value * quantity;
           const oldHp = player.stats.currentHp;
           player.stats.currentHp = Math.min(player.stats.currentHp + healAmount, playerStats.maxHp);
           healAmount = player.stats.currentHp - oldHp;
           
           if (healAmount > 0) {
-            gameState.gameLog.push(`🧪 使用了 ${item.icon} ${item.name}，恢复了 ${healAmount} 点生命值！`);
+            const quantityText = quantity > 1 ? ` x${quantity}` : '';
+            gameState.gameLog.push(`🧪 使用了 ${item.icon} ${item.name}${quantityText}，恢复了 ${healAmount} 点生命值！`);
             if (gameState.combat && gameState.combat.active) {
-              gameState.combat.log.push(`🧪 使用了 ${item.name}，恢复了 ${healAmount} 点生命值！`);
+              gameState.combat.log.push(`🧪 使用了 ${item.name}${quantityText}，恢复了 ${healAmount} 点生命值！`);
             }
-            return { success: true, effect: 'heal', value: healAmount };
+            return { success: true, effect: 'heal', value: healAmount, quantity };
           }
           return { success: false, message: '生命值已满！' };
         }
         
         case 'mana': {
           let manaAmount = effect.isPercent 
-            ? Math.floor(player.stats.maxMp * effect.value) 
-            : effect.value;
+            ? Math.floor(player.stats.maxMp * effect.value) * quantity
+            : effect.value * quantity;
           const oldMp = player.stats.currentMp;
           player.stats.currentMp = Math.min(player.stats.currentMp + manaAmount, player.stats.maxMp);
           manaAmount = player.stats.currentMp - oldMp;
           
           if (manaAmount > 0) {
-            gameState.gameLog.push(`💙 使用了 ${item.icon} ${item.name}，恢复了 ${manaAmount} 点魔法值！`);
+            const quantityText = quantity > 1 ? ` x${quantity}` : '';
+            gameState.gameLog.push(`💙 使用了 ${item.icon} ${item.name}${quantityText}，恢复了 ${manaAmount} 点魔法值！`);
             if (gameState.combat && gameState.combat.active) {
-              gameState.combat.log.push(`💙 使用了 ${item.name}，恢复了 ${manaAmount} 点魔法值！`);
+              gameState.combat.log.push(`💙 使用了 ${item.name}${quantityText}，恢复了 ${manaAmount} 点魔法值！`);
             }
-            return { success: true, effect: 'mana', value: manaAmount };
+            return { success: true, effect: 'mana', value: manaAmount, quantity };
           }
           return { success: false, message: '魔法值已满！' };
         }
         
         case 'buff': {
+          const totalValue = effect.value * quantity;
           if (!gameState.combat.active) {
             if (!player.mapBuffs) player.mapBuffs = [];
             player.mapBuffs.push({
               stat: effect.stat,
-              value: effect.value,
+              value: totalValue,
               duration: effect.duration
             });
           } else {
             if (!gameState.combat.playerBuffs) gameState.combat.playerBuffs = [];
             gameState.combat.playerBuffs.push({
               stat: effect.stat,
-              value: effect.value,
+              value: totalValue,
               duration: effect.duration
             });
           }
@@ -1018,12 +1029,13 @@ class CharacterSystem {
           const statNames = { attack: '攻击力', defense: '防御力' };
           const statName = statNames[effect.stat] || effect.stat;
           const durationType = gameState.combat.active ? '回合' : '步';
+          const quantityText = quantity > 1 ? ` x${quantity}` : '';
           
-          gameState.gameLog.push(`✨ 使用了 ${item.icon} ${item.name}，${statName}+${effect.value}，持续${effect.duration}${durationType}！`);
+          gameState.gameLog.push(`✨ 使用了 ${item.icon} ${item.name}${quantityText}，${statName}+${totalValue}，持续${effect.duration}${durationType}！`);
           if (gameState.combat && gameState.combat.active) {
-            gameState.combat.log.push(`✨ 使用了 ${item.name}，${statName}+${effect.value}，持续${effect.duration}回合！`);
+            gameState.combat.log.push(`✨ 使用了 ${item.name}${quantityText}，${statName}+${totalValue}，持续${effect.duration}回合！`);
           }
-          return { success: true, effect: 'buff', stat: effect.stat, value: effect.value, duration: effect.duration };
+          return { success: true, effect: 'buff', stat: effect.stat, value: totalValue, duration: effect.duration, quantity };
         }
       }
     }

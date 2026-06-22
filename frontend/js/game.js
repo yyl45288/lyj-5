@@ -759,14 +759,11 @@ class Game {
         const item = this.gameState.player.inventory.find(i => i.id === itemId);
         if (!item) return;
         
-        for (let i = 0; i < quantity; i++) {
-            const result = CharacterSystem.useConsumable(this.gameState, itemId);
-            if (!result.success) {
-                this.showNotification(`❌ ${result.message}`);
-                break;
-            } else if (i === 0) {
-                this.showNotification(`✅ ${result.message}`);
-            }
+        const result = CharacterSystem.useConsumable(this.gameState, itemId, quantity);
+        if (result.success) {
+            this.showNotification(`✅ ${result.message || '使用成功！'}`);
+        } else {
+            this.showNotification(`❌ ${result.message}`);
         }
         
         this.render();
