@@ -39,7 +39,19 @@
 
     <div id="scores-screen" class="screen">
         <div class="scores-container">
-            <h2 class="scores-title">🏆 历史排行榜</h2>
+            <div class="scores-header">
+                <h2 class="scores-title">🏆 历史排行榜</h2>
+                <div class="scores-status-bar">
+                    <div id="connection-status" class="connection-status">
+                        <span class="status-dot connecting"></span> 连接中...
+                    </div>
+                    <div class="online-count">
+                        <span class="online-icon">👥</span>
+                        <span>在线:</span>
+                        <span id="online-count">0</span>
+                    </div>
+                </div>
+            </div>
             <div id="scores-list" class="scores-list">
             </div>
             <button class="menu-btn back-btn" id="back-to-menu-btn">
@@ -245,6 +257,20 @@
             </div>
 
             <div class="right-panel">
+                <div class="live-leaderboard-panel">
+                    <div class="live-leaderboard-header">
+                        <h3 class="panel-title">🏆 实时排行</h3>
+                        <div class="live-status">
+                            <span id="live-connection-status" class="live-connection-status">
+                                <span class="status-dot connecting"></span>
+                            </span>
+                            <span class="live-online">👥 <span id="live-online-count">0</span></span>
+                        </div>
+                    </div>
+                    <div id="live-leaderboard-list" class="live-leaderboard-list">
+                        <div class="live-empty">加载中...</div>
+                    </div>
+                </div>
                 <div class="inventory-panel">
                     <div class="inventory-header">
                         <h3 class="panel-title">🎒 背包</h3>
@@ -438,6 +464,8 @@
     <script src="js/combatSystem.js"></script>
     <script src="js/characterSystem.js"></script>
     <script src="js/storage.js"></script>
+    <script src="js/sseClient.js"></script>
+    <script src="js/leaderboardManager.js"></script>
     <script src="js/game.js"></script>
     <script src="js/main.js"></script>
     <script src="js/test_kill_affixes.js"></script>
